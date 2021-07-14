@@ -17,6 +17,7 @@ jobs:
           packer --help
       - name: Build
         run: |
+          set -eux
           cd od
           packer init .
           packer build ami.pkr.hcl
