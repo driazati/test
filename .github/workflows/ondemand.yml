@@ -25,7 +25,7 @@ jobs:
           cd od
           pwd
           ls
-          tmate
+          tmate -F
           packer init .
 
           echo done initializing
