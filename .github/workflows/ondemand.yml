@@ -22,5 +22,9 @@ jobs:
         run: |
           set -eux
           cd od
+          pwd
+          ls
           packer init .
+
+          echo done initializing
           packer build ami.pkr.hcl
