@@ -16,6 +16,8 @@ jobs:
           sudo apt-get update && sudo apt-get install packer
           packer --help
           sudo apt-get install tmate
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: Build
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
