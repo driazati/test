@@ -10,12 +10,18 @@ packer {
 source "amazon-ebs" "ubuntu" {
   ami_name      = "learn-packer-linux-aws"
   force_deregister = true
-  instance_type = "t2.micro"
+  instance_type = "c5a.4xlarge"
   region        = "us-west-2"
 
   # ubuntu 20.04 server
   source_ami = "ami-03d5c68bab01f3496"
   ssh_username = "ubuntu"
+
+  launch_block_device_mappings {
+    device_name = "/dev/sda1"
+    volume_size = 50
+    delete_on_termination = true
+  }
 }
 
 build {
@@ -33,11 +39,3 @@ build {
     ]
   }
 }
-
-# checkout PyTorch
-# install build-essential, clang
-# build PyTorch
-
-
-# how to provision SSH key for only the current user?
-# 

@@ -35,9 +35,11 @@ python --version
 git clone https://github.com/pytorch/pytorch.git
 cd pytorch
 pip install -r requirements.txt
+pip install -r requirements-flake8.txt
+pip install hypothesis flake8 requests py-spy
+make setup_lint
 printenv | sort
-which -a cc
-which -a c++
+
 python setup.py develop
 
 

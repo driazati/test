@@ -9,6 +9,8 @@ setup(
     entry_points={"console_scripts": ["aws_od_cli = aws_od_cli:cli"]},
     python_requires=">=3.7",
     install_requires=[
-        "click"
+        "click",
+        "boto3",
+        "tabulate",
     ],
 )
