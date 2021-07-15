@@ -10,15 +10,20 @@ import json
 import random
 import string
 import tabulate
+import yaspin
 
 from pathlib import Path
 
 HOME_DIR = Path(os.path.expanduser("~"))
 CONFIG_PATH = HOME_DIR / ".pytorch-ondemand"
 KEY_PATH = CONFIG_PATH / "keys"
+INSTANCES_PATH = CONFIG_PATH / "instances.json"
 CONFIG_FILE_PATH = CONFIG_PATH / "config.json"
 
-# Pre-warm the filesystem (runs as root)
+
+# Install user specific things
+# (oauth token for pushes)
+# user files
 STARTUP_SCRIPT = """
 #!/bin/bash
 
@@ -45,6 +50,25 @@ def init():
     gen_config()
     if not KEY_PATH.exists():
         os.mkdir(KEY_PATH)
+    
+    if not INSTANCES_PATH.exists():
+        with open(INSTANCES_PATH, "w") as f:
+            json.dump({}, f)
+
+
+def save_instance(instance, key_path):
+    with open(INSTANCES_PATH, "r") as f:
+        data = json.load(f)
+    
+    id = instance["InstanceId"]
+    data[id] = {
+        "tags": instance["Tags"],
+        "key_path": str(key_path.resolve()),
+    }
+
+    with open(INSTANCES_PATH, "r") as f:
+        json.dump(data, f)
+
 
 
 def gen_key_path() -> Path:
@@ -53,7 +77,7 @@ def gen_key_path() -> Path:
     # Check for existing keys
     existing_keys = os.listdir(KEY_PATH)
     if len(existing_keys) > 0:
-        print(f"Using existing private key {existing_keys[0]}")
+        # print(f"Using existing private key {existing_keys[0]}")
         return KEY_PATH / existing_keys[0]
 
     prefix = config["github_username"]
@@ -138,108 +162,136 @@ def cli():
     pass
 
 
+def fail(spinner):
+    spinner.fail("💥 ")
+
+
+def ok(spinner):
+    spinner.ok("✅ ")
+
+
 @cli.command()
 def create():
     """
     Create a new on-demand
+
+    TODO: this doesn't work when Packer is updating the AMI (since it goes into
+    pending status), there should be a fallback AMI that's the old one
     """
     init()
 
-    amis = ec2().describe_images(Owners=["self"])
-    ami = None
-    for image in amis["Images"]:
-        if image["Name"] == "learn-packer-linux-aws":
-            ami = image
-            break
+    with yaspin.yaspin(text="Finding recent AMI") as spinner:
+        amis = ec2().describe_images(Owners=["self"])
+        ami = None
+        for image in amis["Images"]:
+            if image["Name"] == "learn-packer-linux-aws":
+                ami = image
+                break
 
-    if ami is None:
-        raise RuntimeError("Unable to locate on-demand ami")
+        if ami is None:
+            fail(spinner)
+            raise RuntimeError("Unable to locate on-demand ami")
+        else:
+            ok(spinner)
 
-    key_path = gen_key_path()
-    if key_path.exists():
-        # key already exists
-        pass
-    else:
-        print(f"Creating key pair at {key_path}")
-        create_key_pair(key_path)
+    with yaspin.yaspin(text="Finding SSH key pair") as spinner:
+        key_path = gen_key_path()
+        if key_path.exists():
+            # key already exists
+            pass
+        else:
+            print(f"Creating key pair at {key_path}")
+            create_key_pair(key_path)
+        
+        ok(spinner)
 
-    user_instances = get_instances_for_user(username())
-    existing_names = [get_name(instance) for instance in user_instances]
-    def gen_name():
-        instance_index = 0
-        base = f"ondemand-{username()}"
-        while True:
-            maybe_name = f"{base}-{instance_index}"
-            if maybe_name in existing_names:
-                instance_index += 1
-            else:
-                return maybe_name
+    with yaspin.yaspin(text="Starting EC2 instance") as spinner:
+        user_instances = get_instances_for_user(username())
+        existing_names = [get_name(instance) for instance in user_instances]
+        def gen_name():
+            instance_index = 0
+            base = f"ondemand-{username()}"
+            while True:
+                maybe_name = f"{base}-{instance_index}"
+                if maybe_name in existing_names:
+                    instance_index += 1
+                else:
+                    return maybe_name
 
 
-    instance = ec2().run_instances(
-        BlockDeviceMappings=[
-            {
-                "DeviceName": "/dev/sda1",
-                "Ebs": {
-                    "DeleteOnTermination": True,
-                    "VolumeSize": 50,
-                    "VolumeType": "gp2",
+        instance = ec2().run_instances(
+            BlockDeviceMappings=[
+                {
+                    "DeviceName": "/dev/sda1",
+                    "Ebs": {
+                        "DeleteOnTermination": True,
+                        "VolumeSize": 50,
+                        "VolumeType": "gp2",
+                    },
                 },
-            },
-        ],
-        ImageId=ami["ImageId"],
-        MinCount=1,
-        MaxCount=1,
-        KeyName=key_path.name,
-        InstanceType="c5a.4xlarge",
-        # UserData=STARTUP_SCRIPT,
-        TagSpecifications=[
-            {
-                "ResourceType": "instance",
-                "Tags": [
-                    {"Key": "pytorch-ondemand", "Value": username()},
-                    {"Key": "Name", "Value": gen_name()},
-                ],
-            }
-        ],
-        Monitoring={"Enabled": False},
-        # # TODO: corp net sec group
-        SecurityGroupIds=["sg-00475f77ffc001e74",],  # SSH anywhere
-    )
-    print("Launched instance, waiting for it to come up...")
+            ],
+            ImageId=ami["ImageId"],
+            MinCount=1,
+            MaxCount=1,
+            KeyName=key_path.name,
+            InstanceType="c5a.4xlarge",
+            # UserData=STARTUP_SCRIPT,
+            TagSpecifications=[
+                {
+                    "ResourceType": "instance",
+                    "Tags": [
+                        {"Key": "pytorch-ondemand", "Value": username()},
+                        {"Key": "Name", "Value": gen_name()},
+                    ],
+                }
+            ],
+            Monitoring={"Enabled": False},
+            # # TODO: corp net sec group
+            SecurityGroupIds=["sg-00475f77ffc001e74",],  # SSH anywhere
+        )
+        ok(spinner)
+
     i = 0
     instance_id = instance["Instances"][0]["InstanceId"]
+    save_instance(instance, key_path)
     conditions = {
         "ip": False,
         "running": False
     }
-    while i < 100:
-        fresh_instance = instance_by_id(instance_id)
-        # print(fresh_instance)
-        if fresh_instance["PublicDnsName"].strip() != "":
-            conditions["ip"] = True
-            # break
-        if fresh_instance["State"]["Name"] == "running":
-            conditions["running"] = True
-        
+    with yaspin.yaspin(text="Waiting for instance IP address") as spinner:
+        while i < 100:
+            fresh_instance = instance_by_id(instance_id)
+            # print(fresh_instance)
+            if fresh_instance["PublicDnsName"].strip() != "":
+                conditions["ip"] = True
+                # break
+            if fresh_instance["State"]["Name"] == "running":
+                conditions["running"] = True
+            
+            if all(conditions.values()):
+                break
+            time.sleep(1)
+
         if all(conditions.values()):
-            break
-        print(" . (waiting for instance IP address)")
-        time.sleep(1)
+            spinner.ok("✅ ")
+        else:
+            spinner.fail("💥 ")
+            raise RuntimeError("Exceeded max checking timeout but instance was not assigned a public DNS name")
 
-    if not all(conditions.values()):
-        raise RuntimeError("Exceeded max checking timeout but instance was not assigned a public DNS name")
-
-    i = 0
-    while i < 50:
-        # todo: remove shell
-        proc = subprocess.run(f"ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no -i {key_path} ubuntu@{fresh_instance['PublicDnsName']} ls", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # print(proc.stdout)
-        # print(proc.stderr)
-        if proc.returncode == 0:
-            break
-        print(" . (waiting for SSH)")
-        time.sleep(1)
+    with yaspin.yaspin(text="Waiting for SSH access") as spinner:
+        i = 0
+        while i < 50:
+            cmd = ["ssh", "-o", "ConnectTimeout=3", "-o", "StrictHostKeyChecking=no", "-i", str(key_path), f"ubuntu@{fresh_instance['PublicDnsName']}", "ls"]
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if proc.returncode == 0:
+                break
+            time.sleep(1)
+        
+        if i >= 50:
+            fail(spinner)
+            raise RuntimeError("Could not get SSH access")
+        else:
+            ok(spinner)
 
 
     print(textwrap.dedent(f"""
@@ -259,6 +311,25 @@ def instance_by_id(id):
     return None
 
 
+def instance_for_id_or_name(id, name, user_instances):
+    if (name is None and id is None) or (name is not None and id is not None):
+        raise RuntimeError("Expected one of --name or --id")
+
+    if name is not None:
+        for instance in user_instances:
+            if get_name(instance) == name:
+                return instance
+                break
+    elif id is not None:
+        for instance in user_instances:
+            if instance["InstanceId"] == id:
+                return instance
+    else:
+        raise RuntimeError("Unreachable")
+    
+    return None
+
+
 @click.option("--name")
 @click.option("--id")
 @click.option("--all", is_flag=True)
@@ -268,40 +339,31 @@ def stop(name, all, id, action):
     """
     Delete an on-demand
     """
-    user_instances = get_instances_for_user(username())
-    ids_to_stop = []
-    if all:
-        for instance in user_instances:
-            ids_to_stop.append(instance["InstanceId"])
-    else:
-        to_stop = None
-        if (name is None and id is None) or (name is not None and id is not None):
-            raise RuntimeError("Expected one of --name or --id")
-
-        if name is not None:
+    with yaspin.yaspin(text="Gathering instances") as spinner:
+        user_instances = get_instances_for_user(username())
+        ids_to_stop = []
+        if all:
             for instance in user_instances:
-                if get_name(instance) == name:
-                    to_stop = instance
-                    break
-        elif id is not None:
-            for instance in user_instances:
-                if instance["InstanceId"] == id:
-                    to_stop = instance
-                    break
+                ids_to_stop.append(instance["InstanceId"])
         else:
-            raise RuntimeError("Unreachable")
+            to_stop = instance_for_id_or_name(id, name, user_instances)
 
-        if to_stop is None:
-            raise RuntimeError(f"Instance {name} not found")
+            if to_stop is None:
+                raise RuntimeError(f"Instance {name} not found")
+            
+            ids_to_stop.append(to_stop["InstanceId"])
         
-        ids_to_stop.append(to_stop["InstanceId"])
+        ok(spinner)
     
-    if action == "terminate":
-        ec2().terminate_instances(InstanceIds=ids_to_stop)
-    elif action == "stop":
-        ec2().stop_instances(InstanceIds=ids_to_stop)
-    else:
-        raise RuntimeError(f"Unknown action {action}, expected 'stop' or 'terminate'")
+    with yaspin.yaspin(text="Stopping instances") as spinner:
+        if action == "terminate":
+            ec2().terminate_instances(InstanceIds=ids_to_stop)
+        elif action == "stop":
+            ec2().stop_instances(InstanceIds=ids_to_stop)
+        else:
+            raise RuntimeError(f"Unknown action {action}, expected 'stop' or 'terminate'")
+
+        ok(spinner)
 
 
 def get_name(instance):
@@ -324,6 +386,25 @@ def get_instances_for_user(user):
                 user_instances.append(instance)
     
     return user_instances
+
+
+@click.option("--id")
+@click.option("--name")
+@cli.command()
+def ssh(id, name):
+    user_instances = get_instances_for_user()
+    instance = instance_for_id_or_name(id, name, user_instances)
+    with open(INSTANCES_PATH, "r") as f:
+        saved_instances = json.load(f)
+    
+    id = instance["InstanceId"]
+    if id in saved_instances:
+        key_path = Path(saved_instances[id]["key_path"])
+        cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-i", str(key_path), f"ubuntu@{instance['PublicDnsName']}"]
+        subprocess.run(cmd)
+    else:
+        raise RuntimeError(f"Instance not found in {INSTANCES_PATH}")
+
 
 
 @cli.command()

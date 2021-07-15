@@ -12,5 +12,6 @@ setup(
         "click",
         "boto3",
         "tabulate",
+        "yaspin",
     ],
 )

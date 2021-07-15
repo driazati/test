@@ -13,8 +13,14 @@ jobs:
         run: |
           curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
           sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-          sudo apt-get update && sudo apt-get install packer
+          sudo apt-get update && sudo apt-get install -y packer unzip jq
           packer --help
+
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+          aws --help
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
       - name: Build
@@ -28,3 +34,10 @@ jobs:
 
           echo done initializing
           packer build ami.pkr.hcl
+      - name: Enable fast restore on new AMI
+        run: |
+          SNAPSHOT_ID=$(aws --region us-west-2 ec2 describe-snapshots --filters 'Name=tag-key,Values=ondemand' | jq -r '.Snapshots[0]["SnapshotId"]')
+          aws --region us-west-2 ec2 enable-fast-snapshot-restores --source-snapshot "$SNAPSHOT_ID" --availability-zones us-west-2a us-west-2b us-west-2c us-west-2d
+      # - name: Prune old snapshots and enable fast restore
+      #   run: |
+      #     ???

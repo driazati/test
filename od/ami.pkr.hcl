@@ -13,6 +13,14 @@ source "amazon-ebs" "ubuntu" {
   instance_type = "c5a.4xlarge"
   region        = "us-west-2"
 
+  force_delete_snapshot = true
+  snapshot_tags = {
+    "ondemand": "gha-packer"
+  }
+  tags = {
+    "ondemand": "gha-packer"
+  }
+
   # ubuntu 20.04 server
   source_ami = "ami-03d5c68bab01f3496"
   ssh_username = "ubuntu"
