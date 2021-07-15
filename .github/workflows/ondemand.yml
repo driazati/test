@@ -1,8 +1,10 @@
-name: Re-generate list
+name: On-Demand AMI Push
 on:
   push:
     branches:
       - master
+
+concurrency: ondemand-ami-push
 
 jobs:
   create_ami:
