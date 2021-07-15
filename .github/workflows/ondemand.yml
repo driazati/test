@@ -4,7 +4,9 @@ on:
     branches:
       - master
 
-concurrency: ondemand-ami-push
+concurrency: 
+  group: ondemand-ami-push
+  cancel-in-progress: true
 
 jobs:
   create_ami:
