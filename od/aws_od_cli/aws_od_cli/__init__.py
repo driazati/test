@@ -21,20 +21,38 @@ INSTANCES_PATH = CONFIG_PATH / "instances.json"
 CONFIG_FILE_PATH = CONFIG_PATH / "config.json"
 
 
-# Install user specific things
-# (oauth token for pushes)
-# user files
-STARTUP_SCRIPT = """
-#!/bin/bash
 
-set -eux
-cd /home/ubuntu
 
-cd pytorch
-git 
+def gen_startup_script():
+    config = gen_config()
+    # Install user specific things
+    # (oauth token for pushes)
+    # user files
+    return textwrap.dedent(f"""
+        #!/bin/bash
+        su ubuntu
 
-echo done > /home/ubuntu/done.log
-""".lstrip()
+        set -eux
+        cd /home/ubuntu
+
+        cat <<EOF > /home/ubuntu/.ghstackrc
+        [ghstack]
+        github_url = github.com
+        github_oauth = {config['github_oauth']}
+        github_username = {config['github_username']}
+        EOF
+        chmod 644 /home/ubuntu/.ghstackrc
+
+        sudo -u ubuntu git config --global user.name {config['github_username']}
+        sudo -u ubuntu git config --global user.email {config['github_email']}
+        sudo -u ubuntu git config --global push.default current
+
+        sudo -u ubuntu bash -c 'export PATH="/home/ubuntu/miniconda3/bin:$PATH" && echo {config['github_oauth']} | gh auth login --with-token'
+
+        echo done > /home/ubuntu/.done.log
+    """).strip() + "\n"
+
+
 
 clients = {}
 
@@ -50,7 +68,7 @@ def init():
     gen_config()
     if not KEY_PATH.exists():
         os.mkdir(KEY_PATH)
-    
+
     if not INSTANCES_PATH.exists():
         with open(INSTANCES_PATH, "w") as f:
             json.dump({}, f)
@@ -59,16 +77,15 @@ def init():
 def save_instance(instance, key_path):
     with open(INSTANCES_PATH, "r") as f:
         data = json.load(f)
-    
+
     id = instance["InstanceId"]
     data[id] = {
         "tags": instance["Tags"],
         "key_path": str(key_path.resolve()),
     }
 
-    with open(INSTANCES_PATH, "r") as f:
+    with open(INSTANCES_PATH, "w") as f:
         json.dump(data, f)
-
 
 
 def gen_key_path() -> Path:
@@ -96,6 +113,9 @@ def gen_config():
 
     config_items = [
         ("GitHub Username", "github_username"),
+        ("GitHub Email (for commits)", "github_email"),
+        ("GitHub Personal Access Token (create at https://github.com/settings/tokens with 'repo', 'read:org', and 'workflow' permissions)", "github_oauth"),
+        ("Personal PyTorch fork for pushes (leave blank to skip)", "pytorch_fork"),
     ]
 
     if not CONFIG_FILE_PATH.exists():
@@ -109,7 +129,7 @@ def gen_config():
         if name not in config:
             print(f"{desc}: ", end="")
             config[name] = input()
-
+    
     with open(CONFIG_FILE_PATH, "w") as f:
         json.dump(config, f)
 
@@ -170,8 +190,9 @@ def ok(spinner):
     spinner.ok("✅ ")
 
 
+@click.option("--no-login", is_flag=True, help="skip automatic SSH once on-demand is up")
 @cli.command()
-def create():
+def create(no_login):
     """
     Create a new on-demand
 
@@ -202,12 +223,13 @@ def create():
         else:
             print(f"Creating key pair at {key_path}")
             create_key_pair(key_path)
-        
+
         ok(spinner)
 
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
         user_instances = get_instances_for_user(username())
         existing_names = [get_name(instance) for instance in user_instances]
+
         def gen_name():
             instance_index = 0
             base = f"ondemand-{username()}"
@@ -218,7 +240,7 @@ def create():
                 else:
                     return maybe_name
 
-
+        name = gen_name()
         instance = ec2().run_instances(
             BlockDeviceMappings=[
                 {
@@ -235,13 +257,13 @@ def create():
             MaxCount=1,
             KeyName=key_path.name,
             InstanceType="c5a.4xlarge",
-            # UserData=STARTUP_SCRIPT,
+            UserData=gen_startup_script(),
             TagSpecifications=[
                 {
                     "ResourceType": "instance",
                     "Tags": [
                         {"Key": "pytorch-ondemand", "Value": username()},
-                        {"Key": "Name", "Value": gen_name()},
+                        {"Key": "Name", "Value": name},
                     ],
                 }
             ],
@@ -253,11 +275,8 @@ def create():
 
     i = 0
     instance_id = instance["Instances"][0]["InstanceId"]
-    save_instance(instance, key_path)
-    conditions = {
-        "ip": False,
-        "running": False
-    }
+    save_instance(instance["Instances"][0], key_path)
+    conditions = {"ip": False, "running": False}
     with yaspin.yaspin(text="Waiting for instance IP address") as spinner:
         while i < 100:
             fresh_instance = instance_by_id(instance_id)
@@ -267,7 +286,7 @@ def create():
                 # break
             if fresh_instance["State"]["Name"] == "running":
                 conditions["running"] = True
-            
+
             if all(conditions.values()):
                 break
             time.sleep(1)
@@ -276,38 +295,65 @@ def create():
             spinner.ok("✅ ")
         else:
             spinner.fail("💥 ")
-            raise RuntimeError("Exceeded max checking timeout but instance was not assigned a public DNS name")
+            raise RuntimeError(
+                "Exceeded max checking timeout but instance was not assigned a public DNS name"
+            )
 
     with yaspin.yaspin(text="Waiting for SSH access") as spinner:
         i = 0
         while i < 50:
-            cmd = ["ssh", "-o", "ConnectTimeout=3", "-o", "StrictHostKeyChecking=no", "-i", str(key_path), f"ubuntu@{fresh_instance['PublicDnsName']}", "ls"]
+            cmd = [
+                "ssh",
+                "-o",
+                "ConnectTimeout=3",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-i",
+                str(key_path),
+                f"ubuntu@{fresh_instance['PublicDnsName']}",
+                "ls",
+            ]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if proc.returncode == 0:
                 break
             time.sleep(1)
-        
+
         if i >= 50:
             fail(spinner)
             raise RuntimeError("Could not get SSH access")
         else:
             ok(spinner)
 
+    if no_login:
+        print(
+            textwrap.dedent(
+                f"""
+            Instance created! Log in with:
 
-    print(textwrap.dedent(f"""
-        Instance created! Log in with:
-
-            ssh -i {key_path} ubuntu@{fresh_instance['PublicDnsName']}
-    """))
+                aws_od_cli ssh --name {name}
+        """
+            )
+        )
+    else:
+        cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-i",
+            str(key_path),
+            f"ubuntu@{fresh_instance['PublicDnsName']}",
+        ]
+        subprocess.run(cmd)
     # print(json.dumps(ami, indent=2))
     # print(instance)
+
 
 def instance_by_id(id):
     user_instances = get_instances_for_user(username())
     for instance in user_instances:
         if instance["InstanceId"] == id:
             return instance
-    
+
     return None
 
 
@@ -326,7 +372,7 @@ def instance_for_id_or_name(id, name, user_instances):
                 return instance
     else:
         raise RuntimeError("Unreachable")
-    
+
     return None
 
 
@@ -339,6 +385,8 @@ def stop(name, all, id, action):
     """
     Delete an on-demand
     """
+    init()
+
     with yaspin.yaspin(text="Gathering instances") as spinner:
         user_instances = get_instances_for_user(username())
         ids_to_stop = []
@@ -350,18 +398,20 @@ def stop(name, all, id, action):
 
             if to_stop is None:
                 raise RuntimeError(f"Instance {name} not found")
-            
+
             ids_to_stop.append(to_stop["InstanceId"])
-        
+
         ok(spinner)
-    
+
     with yaspin.yaspin(text="Stopping instances") as spinner:
         if action == "terminate":
             ec2().terminate_instances(InstanceIds=ids_to_stop)
         elif action == "stop":
             ec2().stop_instances(InstanceIds=ids_to_stop)
         else:
-            raise RuntimeError(f"Unknown action {action}, expected 'stop' or 'terminate'")
+            raise RuntimeError(
+                f"Unknown action {action}, expected 'stop' or 'terminate'"
+            )
 
         ok(spinner)
 
@@ -384,7 +434,7 @@ def get_instances_for_user(user):
             name = get_name(instance)
             if name is not None and name.startswith(f"ondemand-{user}-"):
                 user_instances.append(instance)
-    
+
     return user_instances
 
 
@@ -392,19 +442,33 @@ def get_instances_for_user(user):
 @click.option("--name")
 @cli.command()
 def ssh(id, name):
-    user_instances = get_instances_for_user()
-    instance = instance_for_id_or_name(id, name, user_instances)
+    """
+    SSH into a running on-demand by name or instance ID (see 'aws_od_cli list')
+    """
+    user_instances = get_instances_for_user(username())
+    user_instances = [instance for instance in user_instances if instance["State"]["Name"] == "running"]
+
+    if len(user_instances) == 1 and id is None and name is None:
+        instance = user_instances[0]
+    else:
+        instance = instance_for_id_or_name(id, name, user_instances)
     with open(INSTANCES_PATH, "r") as f:
         saved_instances = json.load(f)
-    
+
     id = instance["InstanceId"]
     if id in saved_instances:
         key_path = Path(saved_instances[id]["key_path"])
-        cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-i", str(key_path), f"ubuntu@{instance['PublicDnsName']}"]
+        cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-i",
+            str(key_path),
+            f"ubuntu@{instance['PublicDnsName']}",
+        ]
         subprocess.run(cmd)
     else:
         raise RuntimeError(f"Instance not found in {INSTANCES_PATH}")
-
 
 
 @cli.command()
@@ -419,12 +483,16 @@ def list():
         state = instance["State"]["Name"]
         if state == "terminated":
             continue
-        rows.append({
-            "Name": get_name(instance),
-            "Status": instance["State"]["Name"],
-            "Id": instance["InstanceId"],
-            "Launched": instance["LaunchTime"].astimezone().strftime("%Y-%m-%d %H:%M:%S")
-        })
+        rows.append(
+            {
+                "Name": get_name(instance),
+                "Status": instance["State"]["Name"],
+                "Id": instance["InstanceId"],
+                "Launched": instance["LaunchTime"]
+                .astimezone()
+                .strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     if len(rows) == 0:
         print("No on-demands found! Start one with 'aws_od_cli create'")
