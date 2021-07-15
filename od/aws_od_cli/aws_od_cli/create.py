@@ -31,7 +31,7 @@ def find_ami() -> Dict[str, Any]:
     with yaspin.yaspin(text="Finding recent AMI") as spinner:
         amis = ec2().describe_images(Owners=["self"])
         for image in amis["Images"]:
-            if image["Name"] == "learn-packer-linux-aws":
+            if image["Name"] == "pytorch-ondemand-ami":
                 ami = image
                 break
 
