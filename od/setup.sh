@@ -20,6 +20,10 @@ bash conda.sh -b -p
 ./miniconda3/bin/conda init bash
 rm conda.sh
 
+# Setup VSCode Server
+unzip code.zip
+rm code.zip
+
 # Manually 'activate' conda to avoid starting a new shell
 export PATH=$HOME/miniconda3/bin:$PATH
 

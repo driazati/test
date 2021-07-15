@@ -157,6 +157,7 @@ def ssh(id, name):
     If you only have a single on-demand the --id or --name flags aren't necessary.
     Also see 'aws_od_cli list'.
     """
+    # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
     subprocess.run(
         ["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"],]
