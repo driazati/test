@@ -25,5 +25,5 @@ pip install -r requirements-flake8.txt
 pip install hypothesis flake8 requests py-spy
 make setup_lint
 
-# python setup.py develop
+python setup.py develop
 
