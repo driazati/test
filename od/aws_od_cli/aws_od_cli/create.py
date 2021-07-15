@@ -1,23 +1,32 @@
-import sys
+# -*- coding: utf-8 -*-
+
 import time
 import os
-import click
 import textwrap
 import subprocess
-import boto3
-import json
-import random
-import string
-import tabulate
 import yaspin
-import shutil
 
 from pathlib import Path
+from typing import Dict, Any, Optional, cast, Tuple, List
 
-from .utils import *
+from .utils import (
+    SOCKETS_DIR,
+    SSH_CONFIG_PATH,
+    create_key_pair,
+    ec2,
+    fail,
+    gen_config,
+    gen_key_path,
+    gen_saved_instances,
+    get_instances_for_user,
+    get_name,
+    instance_by_id,
+    ok,
+    username,
+)
 
 
-def find_ami():
+def find_ami() -> Dict[str, Any]:
     ami = None
     with yaspin.yaspin(text="Finding recent AMI") as spinner:
         amis = ec2().describe_images(Owners=["self"])
@@ -32,10 +41,10 @@ def find_ami():
         else:
             ok(spinner)
 
-    return ami
+    return cast(Dict[str, Any], ami)
 
 
-def find_or_create_ssh_key():
+def find_or_create_ssh_key() -> Path:
     with yaspin.yaspin(text="Finding SSH key pair") as spinner:
         key_path = gen_key_path()
         if key_path.exists():
@@ -49,7 +58,7 @@ def find_or_create_ssh_key():
     return key_path
 
 
-def gen_startup_script():
+def gen_startup_script() -> str:
     config = gen_config()
     # Install user specific things
     # (oauth token for pushes)
@@ -87,12 +96,12 @@ def gen_startup_script():
     )
 
 
-def create_instance(ami, key_path):
+def create_instance(ami: Dict[str, Any], key_path: Path) -> Tuple[Dict[str, Any], str]:
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
         user_instances = get_instances_for_user(username())
         existing_names = [get_name(instance) for instance in user_instances]
 
-        def gen_name():
+        def gen_name() -> str:
             instance_index = 0
             base = f"ondemand-{username()}"
             while True:
@@ -131,14 +140,14 @@ def create_instance(ami, key_path):
             ],
             Monitoring={"Enabled": False},
             # # TODO: corp net sec group
-            SecurityGroupIds=["sg-00475f77ffc001e74",],  # SSH anywhere
+            SecurityGroupIds=["sg-00475f77ffc001e74"],  # SSH anywhere
         )
         ok(spinner)
 
     return instance, name
 
 
-def wait_for_ip_address(instance):
+def wait_for_ip_address(instance: Dict[str, Any]) -> Dict[str, Any]:
     id = instance["InstanceId"]
     i = 0
     conditions = {"ip": False, "running": False}
@@ -146,7 +155,8 @@ def wait_for_ip_address(instance):
     with yaspin.yaspin(text="Waiting for instance IP address") as spinner:
         while i < 100:
             fresh_instance = instance_by_id(id)
-            # print(fresh_instance)
+            if fresh_instance is None:
+                raise RuntimeError(f"Expected instance {id} to exist")
             if fresh_instance["PublicDnsName"].strip() != "":
                 conditions["ip"] = True
                 # break
@@ -164,11 +174,13 @@ def wait_for_ip_address(instance):
             raise RuntimeError(
                 "Exceeded max checking timeout but instance was not assigned a public DNS name"
             )
-    
+
+    if fresh_instance is None:
+        raise RuntimeError(f"Instance should not be None")
     return fresh_instance
 
 
-def wait_for_ssh_access(instance):
+def wait_for_ssh_access(instance: Dict[str, Any]) -> Dict[str, Any]:
     ssh_dest = instance["InstanceId"]
 
     with yaspin.yaspin(text="Waiting for SSH access") as spinner:
@@ -193,11 +205,11 @@ def wait_for_ssh_access(instance):
             raise RuntimeError("Could not get SSH access")
         else:
             ok(spinner)
-    
+
     return instance
 
 
-def copy_files(instance, files):
+def copy_files(instance: Dict[str, Any], files: List[Dict[str, str]]) -> None:
     ssh_dest = instance["InstanceId"]
 
     with yaspin.yaspin(text="Copying config files") as spinner:
@@ -221,7 +233,7 @@ def copy_files(instance, files):
         ok(spinner)
 
 
-def add_ssh_config_include():
+def add_ssh_config_include() -> None:
     ssh_config = Path(os.path.expanduser("~")) / ".ssh" / "config"
     with open(ssh_config, "r") as f:
         content = f.read()
@@ -236,10 +248,10 @@ def add_ssh_config_include():
         f.write(content)
 
 
-def write_ssh_configs():
+def write_ssh_configs() -> None:
     add_ssh_config_include()
 
-    def gen_ssh_config(name: str, hostname: str, key: Path):
+    def gen_ssh_config(name: str, hostname: str, key: Path) -> str:
         return textwrap.dedent(
             f"""
             Host {name}

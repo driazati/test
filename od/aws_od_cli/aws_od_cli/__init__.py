@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+from typing import Optional
 import click
 import textwrap
 import subprocess
@@ -5,14 +8,35 @@ import json
 import tabulate
 import yaspin
 
-from aws_od_cli.create import *
-from aws_od_cli.utils import *
-from aws_od_cli.list import *
-from aws_od_cli.configs import *
+from aws_od_cli.create import (
+    find_ami,
+    find_or_create_ssh_key,
+    create_instance,
+    wait_for_ip_address,
+    wait_for_ssh_access,
+    write_ssh_configs,
+    copy_files,
+)
+from aws_od_cli.utils import (
+    init,
+    save_instance,
+    ec2,
+    instance_for_id_or_name,
+    instance_for_id_or_name_or_guess,
+    stop_instances,
+    ok,
+    fail,
+    locate_vscode,
+    FILES_PATH,
+    get_instances_for_user,
+    username,
+)
+from aws_od_cli.list import get_live_ondemands
+from aws_od_cli.configs import add_file, remove_file, list_files
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """
     Create and manage PyTorch OSS On-Demand machines. Machines are provisioned in
     AWS based on the most recent build of the 'viable/strict' branch of PyTorch.
@@ -39,7 +63,7 @@ def cli():
     "--rm", is_flag=True, help="stop the on-demand once the SSH session is exited"
 )
 @cli.command()
-def create(no_login, no_files, rm):
+def create(no_login: bool, no_files: bool, rm: bool) -> None:
     """
     Create a new on-demand
 
@@ -101,7 +125,7 @@ def create(no_login, no_files, rm):
 @click.option("--all", is_flag=True)
 @click.option("--action", default="terminate")
 @cli.command()
-def stop(name, all, id, action):
+def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None:
     """
     Delete an on-demand. Use '--action stop' to pause an on-demand, or leave this
     option off to permanently terminate an on-demand.
@@ -128,7 +152,7 @@ def stop(name, all, id, action):
 @click.option("--id")
 @click.option("--name")
 @cli.command()
-def vscode(id, name):
+def vscode(id: Optional[str], name: Optional[str]) -> None:
     """
     Launch vscode for a remote
 
@@ -150,7 +174,7 @@ def vscode(id, name):
 @click.option("--id")
 @click.option("--name")
 @cli.command()
-def ssh(id, name):
+def ssh(id: Optional[str], name: Optional[str]) -> None:
     """
     SSH into a running on-demand
 
@@ -159,16 +183,14 @@ def ssh(id, name):
     """
     # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
-    subprocess.run(
-        ["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"],]
-    )
+    subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"]])
 
 
 @click.option("--add")
 @click.option("--remove-id")
 @click.option("--list", is_flag=True)
 @cli.command()
-def configs(add, remove_id, list):
+def configs(add: Optional[str], remove_id: Optional[str], list: bool) -> None:
     """
     Manage files to copy to on-demand instances (dotfiles, etc)
     """
@@ -184,12 +206,16 @@ def configs(add, remove_id, list):
         if len(rows) == 0:
             print("No files yet, use 'aws_od_cli configs --add <some file>")
         else:
-            print(tabulate.tabulate([d.values() for d in rows], headers=rows[0].keys()))
+            print(
+                tabulate.tabulate(
+                    [d.values() for d in rows], headers=[k for k in rows[0].keys()]
+                )
+            )
 
 
 @click.option("--full", is_flag=True, help="Show more info about each on-demand")
 @cli.command()
-def list(full):
+def list(full: bool) -> None:
     """
     List all your on-demands
     """
@@ -198,11 +224,15 @@ def list(full):
     if len(rows) == 0:
         print("No on-demands found! Start one with 'aws_od_cli create'")
     else:
-        print(tabulate.tabulate([d.values() for d in rows], headers=rows[0].keys()))
+        print(
+            tabulate.tabulate(
+                [d.values() for d in rows], headers=[k for k in rows[0].keys()]
+            )
+        )
 
 
 @cli.command()
-def rage():
+def rage() -> None:
     """
     Output logs from the most recent few runs
     """

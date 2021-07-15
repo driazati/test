@@ -1,30 +1,25 @@
-import sys
-import time
-import os
-import click
-import textwrap
-import subprocess
-import boto3
+# -*- coding: utf-8 -*-
+
 import json
-import random
-import string
-import tabulate
-import yaspin
 import shutil
 
+from typing import Dict, Any, List, cast
 from pathlib import Path
 
-from aws_od_cli.utils import *
+from aws_od_cli.utils import FILES_DIR, FILES_PATH, HOME_DIR
 
-def load_files():
+
+def load_files() -> List[Dict[str, Any]]:
     with open(FILES_PATH, "r") as f:
-        return json.load(f)
+        return cast(List[Dict[str, Any]], json.load(f))
 
-def save_files(files):
+
+def save_files(files: List[Dict[str, Any]]) -> None:
     with open(FILES_PATH, "w") as f:
         json.dump(files, f)
 
-def gen_source_path(file: Path):
+
+def gen_source_path(file: Path) -> Path:
     dest_path = FILES_DIR / file.name
     i = 0
     while True:
@@ -35,7 +30,8 @@ def gen_source_path(file: Path):
 
     return dest_path
 
-def gen_id():
+
+def gen_id() -> int:
     files = load_files()
     i = 0
     while True:
@@ -50,7 +46,7 @@ def gen_id():
         i += 1
 
 
-def add_file(path: str):
+def add_file(path: str) -> None:
     file = Path(path)
     files = load_files()
 
@@ -69,7 +65,8 @@ def add_file(path: str):
     save_files(files)
     print(f"Added {source_path} -> {dest_path}")
 
-def remove_file(id: str):
+
+def remove_file(id: str) -> None:
     remove_id = int(id)
     files = load_files()
     idx_to_remove = None
@@ -86,8 +83,9 @@ def remove_file(id: str):
         f = files.pop(idx_to_remove)
         save_files(files)
         print(f"Removed file {remove_id}: {f['name']}")
-    
-def list_files():
+
+
+def list_files() -> List[Dict[str, str]]:
     files = load_files()
     rows = []
     for f in files:
@@ -98,5 +96,5 @@ def list_files():
                 "Path": f'{f["source_path"]} -> {f["dest_path"]}',
             }
         )
-    
+
     return rows

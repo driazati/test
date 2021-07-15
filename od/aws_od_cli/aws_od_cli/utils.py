@@ -1,18 +1,16 @@
+# -*- coding: utf-8 -*-
+
 import sys
-import time
 import os
-import click
-import textwrap
-import subprocess
 import boto3
 import json
 import random
 import string
-import tabulate
+import botocore
 import yaspin
-import shutil
 
 from pathlib import Path
+from typing import List, Dict, Any, Optional, cast
 
 
 HOME_DIR = Path(os.path.expanduser("~"))
@@ -28,22 +26,22 @@ FILES_PATH = CONFIG_PATH / "files.json"
 clients = {}
 
 
-def fail(spinner):
+def fail(spinner: yaspin.Spinner) -> None:
     spinner.fail("💥 ")
 
 
-def ok(spinner):
+def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
 
 
-def ec2():
+def ec2() -> botocore.client.EC2:
     if "ec2" not in clients:
         clients["ec2"] = boto3.client("ec2", region_name="us-west-2")
 
     return clients["ec2"]
 
 
-def create_key_pair(key_path: Path):
+def create_key_pair(key_path: Path) -> str:
     key_pair = ec2().create_key_pair(KeyName=key_path.name)
     private_key = key_pair["KeyMaterial"]
 
@@ -73,7 +71,7 @@ def gen_key_path() -> Path:
     return key_path
 
 
-def get_instances_for_user(user):
+def get_instances_for_user(user: str) -> List[Dict[str, Any]]:
     instances = ec2().describe_instances()
 
     user_instances = []
@@ -86,7 +84,7 @@ def get_instances_for_user(user):
     return user_instances
 
 
-def gen_config():
+def gen_config() -> Dict[str, Any]:
     if not CONFIG_PATH.exists():
         os.mkdir(CONFIG_PATH)
 
@@ -115,31 +113,31 @@ def gen_config():
     with open(CONFIG_FILE_PATH, "w") as f:
         json.dump(config, f)
 
-    return config
+    return cast(Dict[str, Any], config)
 
 
-def save_config(name, value):
+def save_config(name: str, value: str) -> None:
     config = gen_config()
     config[name] = value
     with open(CONFIG_FILE_PATH, "w") as f:
         json.dump(config, f)
 
 
-def username():
+def username() -> str:
     config = gen_config()
-    return config["github_username"]
+    return cast(str, config["github_username"])
 
 
-def get_name(instance):
+def get_name(instance: Dict[str, Any]) -> Optional[str]:
     if "Tags" in instance:
         for tag in instance["Tags"]:
             if tag["Key"] == "Name":
-                return tag["Value"]
+                return cast(str, tag["Value"])
 
     return None
 
 
-def instance_by_id(id):
+def instance_by_id(id: str) -> Optional[Dict[str, Any]]:
     user_instances = get_instances_for_user(username())
     for instance in user_instances:
         if instance["InstanceId"] == id:
@@ -148,7 +146,9 @@ def instance_by_id(id):
     return None
 
 
-def instance_for_id_or_name(id, name, user_instances):
+def instance_for_id_or_name(
+    id: Optional[str], name: Optional[str], user_instances: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
     if (name is None and id is None) or (name is not None and id is not None):
         raise RuntimeError("Expected one of --name or --id")
 
@@ -167,9 +167,15 @@ def instance_for_id_or_name(id, name, user_instances):
     return None
 
 
-def instance_for_id_or_name_or_guess(id, name):
+def instance_for_id_or_name_or_guess(
+    id: Optional[str], name: Optional[str]
+) -> Dict[str, Any]:
     user_instances = get_instances_for_user(username())
-    user_instances = [instance for instance in user_instances if instance["State"]["Name"] == "running"]
+    user_instances = [
+        instance
+        for instance in user_instances
+        if instance["State"]["Name"] == "running"
+    ]
 
     if id is None and name is None:
         if len(user_instances) == 1:
@@ -190,7 +196,7 @@ def instance_for_id_or_name_or_guess(id, name):
     raise RuntimeError("Unreachable")
 
 
-def locate_vscode():
+def locate_vscode() -> Path:
     if sys.platform != "darwin":
         raise NotImplementedError("vscode startup not supported on Linux/Windows")
 
@@ -214,7 +220,7 @@ def locate_vscode():
     return (app_path / "Contents" / "Resources" / "app" / "bin" / "code").resolve()
 
 
-def stop_instances(action, ids_to_stop):
+def stop_instances(action: str, ids_to_stop: List[str]) -> None:
     with yaspin.yaspin(text="Stopping instances") as spinner:
         if action == "terminate":
             ec2().terminate_instances(InstanceIds=ids_to_stop)
@@ -228,12 +234,12 @@ def stop_instances(action, ids_to_stop):
         ok(spinner)
 
 
-def gen_saved_instances():
+def gen_saved_instances() -> Dict[str, Any]:
     with open(INSTANCES_PATH, "r") as f:
-        return json.load(f)
+        return cast(Dict[str, Any], json.load(f))
 
 
-def init():
+def init() -> None:
     gen_config()
     if not KEY_PATH.exists():
         os.mkdir(KEY_PATH)
@@ -257,7 +263,7 @@ def init():
         os.mkdir(SOCKETS_DIR)
 
 
-def save_instance(instance, key_path):
+def save_instance(instance: Dict[str, Any], key_path: Path) -> None:
     with open(INSTANCES_PATH, "r") as f:
         data = json.load(f)
 
