@@ -169,6 +169,7 @@ def instance_for_id_or_name(id, name, user_instances):
 
 def instance_for_id_or_name_or_guess(id, name):
     user_instances = get_instances_for_user(username())
+    user_instances = [instance for instance in user_instances if instance["State"]["Name"] == "running"]
 
     if id is None and name is None:
         if len(user_instances) == 1:
