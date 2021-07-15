@@ -6,7 +6,7 @@ lsb_release -a
 # Wait for background stuff to finish before launching apt
 /usr/bin/cloud-init status --wait
 sudo apt update
-sudo apt install -y build-essential clang git ccache unzip
+sudo apt install -y build-essential clang git ccache unzip zip ncdu fish
 
 # Install clangd
 curl -LO https://github.com/clangd/clangd/releases/download/12.0.0/clangd-linux-12.0.0.zip

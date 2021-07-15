@@ -1,4 +1,3 @@
-from re import I, sub
 import sys
 import time
 import os
@@ -11,6 +10,7 @@ import random
 import string
 import tabulate
 import yaspin
+import shutil
 
 from pathlib import Path
 
@@ -19,8 +19,10 @@ CONFIG_PATH = HOME_DIR / ".pytorch-ondemand"
 KEY_PATH = CONFIG_PATH / "keys"
 INSTANCES_PATH = CONFIG_PATH / "instances.json"
 CONFIG_FILE_PATH = CONFIG_PATH / "config.json"
-
-
+SSH_CONFIG_PATH = CONFIG_PATH / "ssh_config"
+SOCKETS_DIR = CONFIG_PATH / "sockets"
+FILES_DIR = CONFIG_PATH / "files"
+FILES_PATH = CONFIG_PATH / "files.json"
 
 
 def gen_startup_script():
@@ -28,7 +30,9 @@ def gen_startup_script():
     # Install user specific things
     # (oauth token for pushes)
     # user files
-    return textwrap.dedent(f"""
+    return (
+        textwrap.dedent(
+            f"""
         #!/bin/bash
         su ubuntu
 
@@ -47,14 +51,65 @@ def gen_startup_script():
         sudo -u ubuntu git config --global user.email {config['github_email']}
         sudo -u ubuntu git config --global push.default current
 
+        cd /home/ubuntu/pytorch
+        sudo -u ubuntu git remote set-url origin https://{config['github_username']}:{config['github_oauth']}@github.com/pytorch/pytorch.git
+
         sudo -u ubuntu bash -c 'export PATH="/home/ubuntu/miniconda3/bin:$PATH" && echo {config['github_oauth']} | gh auth login --with-token'
 
         echo done > /home/ubuntu/.done.log
-    """).strip() + "\n"
-
+    """
+        ).strip()
+        + "\n"
+    )
 
 
 clients = {}
+
+
+def add_ssh_config_include():
+    ssh_config = Path(os.path.expanduser("~")) / ".ssh" / "config"
+    with open(ssh_config, "r") as f:
+        content = f.read()
+    
+    line = "Include ~/.pytorch-ondemand/ssh_config"
+    if line in content:
+        return
+    
+    content = line + "\n\n" + content
+
+    with open(ssh_config, "w") as f:
+        f.write(content)
+
+
+def write_ssh_configs():
+    init()
+
+    add_ssh_config_include()
+
+    def gen_ssh_config(name: str, hostname: str, key: Path):
+        return textwrap.dedent(f"""
+            Host {name}
+                User ubuntu
+                IdentityFile {str(key)}
+                Hostname {str(hostname)}
+                ControlMaster auto
+                ControlPath {str((SOCKETS_DIR / name).resolve())}
+                ControlPersist 600
+
+        """).strip()
+
+    saved_instances = gen_saved_instances()
+    output = ""
+    for instance, data in saved_instances.items():
+        output += gen_ssh_config(instance, data["hostname"], Path(data["key_path"])) + "\n\n"
+
+    with open(SSH_CONFIG_PATH, "w") as f:
+        f.write(output)
+
+
+def gen_saved_instances():
+    with open(INSTANCES_PATH, "r") as f:
+        return json.load(f)
 
 
 def ec2():
@@ -73,6 +128,20 @@ def init():
         with open(INSTANCES_PATH, "w") as f:
             json.dump({}, f)
 
+    if not FILES_DIR.exists():
+        os.mkdir(FILES_DIR)
+
+    if not FILES_PATH.exists():
+        with open(FILES_PATH, "w") as f:
+            json.dump([], f)
+
+    if not SSH_CONFIG_PATH.exists():
+        with open(FILES_PATH, "w") as f:
+            f.write("")
+    
+    if not SOCKETS_DIR.exists():
+        os.mkdir(SOCKETS_DIR)
+
 
 def save_instance(instance, key_path):
     with open(INSTANCES_PATH, "r") as f:
@@ -81,6 +150,7 @@ def save_instance(instance, key_path):
     id = instance["InstanceId"]
     data[id] = {
         "tags": instance["Tags"],
+        "hostname": instance["PublicDnsName"],
         "key_path": str(key_path.resolve()),
     }
 
@@ -114,7 +184,10 @@ def gen_config():
     config_items = [
         ("GitHub Username", "github_username"),
         ("GitHub Email (for commits)", "github_email"),
-        ("GitHub Personal Access Token (create at https://github.com/settings/tokens with 'repo', 'read:org', and 'workflow' permissions)", "github_oauth"),
+        (
+            "GitHub Personal Access Token (create at https://github.com/settings/tokens with 'repo', 'read:org', and 'workflow' permissions)",
+            "github_oauth",
+        ),
         ("Personal PyTorch fork for pushes (leave blank to skip)", "pytorch_fork"),
     ]
 
@@ -129,7 +202,7 @@ def gen_config():
         if name not in config:
             print(f"{desc}: ", end="")
             config[name] = input()
-    
+
     with open(CONFIG_FILE_PATH, "w") as f:
         json.dump(config, f)
 
@@ -190,15 +263,28 @@ def ok(spinner):
     spinner.ok("✅ ")
 
 
-@click.option("--no-login", is_flag=True, help="skip automatic SSH once on-demand is up")
+@click.option(
+    "--no-login", is_flag=True, help="skip automatic SSH once on-demand is up"
+)
+@click.option(
+    "--no-files", is_flag=True, help="skip copying files from 'aws_od_cli configs'"
+)
+@click.option(
+    "--rm", is_flag=True, help="stop the on-demand once the SSH session is exited"
+)
 @cli.command()
-def create(no_login):
+def create(no_login, no_files, rm):
     """
     Create a new on-demand
 
     TODO: this doesn't work when Packer is updating the AMI (since it goes into
     pending status), there should be a fallback AMI that's the old one
     """
+    if no_login and rm:
+        raise RuntimeError(
+            "--rm can only be used when auto-ssh is enabled, so remove the --no-login flag"
+        )
+
     init()
 
     with yaspin.yaspin(text="Finding recent AMI") as spinner:
@@ -299,6 +385,13 @@ def create(no_login):
                 "Exceeded max checking timeout but instance was not assigned a public DNS name"
             )
 
+    # Re-save to get DNS name in
+    save_instance(fresh_instance, key_path)
+
+    write_ssh_configs()
+
+    ssh_dest = fresh_instance["InstanceId"]
+
     with yaspin.yaspin(text="Waiting for SSH access") as spinner:
         i = 0
         while i < 50:
@@ -308,9 +401,7 @@ def create(no_login):
                 "ConnectTimeout=3",
                 "-o",
                 "StrictHostKeyChecking=no",
-                "-i",
-                str(key_path),
-                f"ubuntu@{fresh_instance['PublicDnsName']}",
+                ssh_dest,
                 "ls",
             ]
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -322,6 +413,33 @@ def create(no_login):
             fail(spinner)
             raise RuntimeError("Could not get SSH access")
         else:
+            ok(spinner)
+
+    if not no_files:
+        with open(FILES_PATH, "r") as f:
+            files = json.load(f)
+        with yaspin.yaspin(text="Copying config files") as spinner:
+            for f in files:
+                dest = Path(f["dest_path"])
+                cmd = [
+                    "ssh",
+                    "-i",
+                    str(key_path),
+                    f"ubuntu@{fresh_instance['PublicDnsName']}",
+                    "mkdir",
+                    "-p",
+                    dest.parent,
+                ]
+                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                cmd = [
+                    "scp",
+                    "-i",
+                    str(key_path),
+                    f["source_path"],
+                    f"ubuntu@{fresh_instance['PublicDnsName']}:{str(dest)}",
+                ]
+                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
             ok(spinner)
 
     if no_login:
@@ -339,13 +457,12 @@ def create(no_login):
             "ssh",
             "-o",
             "StrictHostKeyChecking=no",
-            "-i",
-            str(key_path),
-            f"ubuntu@{fresh_instance['PublicDnsName']}",
+            ssh_dest,
         ]
         subprocess.run(cmd)
-    # print(json.dumps(ami, indent=2))
-    # print(instance)
+
+        if rm:
+            ec2().terminate_instances(InstanceIds=[fresh_instance["InstanceId"]])
 
 
 def instance_by_id(id):
@@ -438,6 +555,62 @@ def get_instances_for_user(user):
     return user_instances
 
 
+def locate_vscode():
+    app_paths = [
+        Path("/Applications"),
+        Path(HOME_DIR / "Applications"),
+    ]
+
+    app_path = None
+    for path in app_paths:
+        codes = [x for x in os.listdir(path) if "Visual Studio Code.app" in x]
+        if len(codes) > 0:
+            app_path = path / codes[0]
+            break
+
+    if app_path is None:
+        raise RuntimeError(
+            f"Unable to locate Visual Studio Code.app in these dirs: {app_paths}"
+        )
+
+    return (app_path / "Contents" / "Resources" / "app" / "bin" / "code").resolve()
+
+
+@click.option("--id")
+@click.option("--name")
+@cli.command()
+def vscode(id, name):
+    """
+    Launch vscode for a remote
+    """
+    if sys.platform != "darwin":
+        raise NotImplementedError("vscode startup not supported on Linux/Windows")
+
+    user_instances = get_instances_for_user(username())
+    user_instances = [
+        instance
+        for instance in user_instances
+        if instance["State"]["Name"] == "running"
+    ]
+
+    if len(user_instances) == 1 and id is None and name is None:
+        instance = user_instances[0]
+    else:
+        instance = instance_for_id_or_name(id, name, user_instances)
+
+    with open(INSTANCES_PATH, "r") as f:
+        saved_instances = json.load(f)
+
+    code_exe = locate_vscode()
+    name = instance["InstanceId"]
+    cmd = [
+        code_exe,
+        "--folder-uri",
+        f"vscode-remote://ssh-remote+{name}/home/ubuntu/pytorch",
+    ]
+    subprocess.run(cmd)
+
+
 @click.option("--id")
 @click.option("--name")
 @cli.command()
@@ -446,7 +619,11 @@ def ssh(id, name):
     SSH into a running on-demand by name or instance ID (see 'aws_od_cli list')
     """
     user_instances = get_instances_for_user(username())
-    user_instances = [instance for instance in user_instances if instance["State"]["Name"] == "running"]
+    user_instances = [
+        instance
+        for instance in user_instances
+        if instance["State"]["Name"] == "running"
+    ]
 
     if len(user_instances) == 1 and id is None and name is None:
         instance = user_instances[0]
@@ -471,28 +648,136 @@ def ssh(id, name):
         raise RuntimeError(f"Instance not found in {INSTANCES_PATH}")
 
 
+@click.option("--add")
+@click.option("--remove-id")
+@click.option("--list", is_flag=True)
 @cli.command()
-def list():
+def configs(add, remove_id, list):
+    """
+    Manage files to copy to on-demand instances (dotfiles, etc)
+    """
+    init()
+
+    with open(FILES_PATH, "r") as f:
+        files = json.load(f)
+
+    def save():
+        with open(FILES_PATH, "w") as f:
+            json.dump(files, f)
+
+    def gen_source_path(file: Path):
+        dest_path = FILES_DIR / file.name
+        i = 0
+        while True:
+            if not dest_path.exists():
+                break
+            dest_path = FILES_DIR / f"{file.name}-{i}"
+            i += 1
+
+        return dest_path
+
+    def gen_id():
+        i = 0
+        while True:
+            ok = True
+            for f in files:
+                if f["id"] == i:
+                    ok = False
+                    break
+
+            if ok:
+                return i
+            i += 1
+
+    if add is not None:
+        file = Path(add)
+
+        source_path = gen_source_path(file)
+        shutil.copy(file, source_path)
+        dest_path = Path("/home/ubuntu/") / file.relative_to(HOME_DIR)
+
+        files.append(
+            {
+                "id": gen_id(),
+                "name": file.name,
+                "dest_path": str(dest_path),
+                "source_path": str(source_path),
+            }
+        )
+        save()
+        print(f"Added {source_path} -> {dest_path}")
+
+    if remove_id is not None:
+        remove_id = int(remove_id)
+        idx_to_remove = None
+        for index, f in enumerate(files):
+            if f["id"] == remove_id:
+                idx_to_remove = index
+                break
+
+        if idx_to_remove is None:
+            raise RuntimeError(
+                f"Id {remove_id} not found, check 'aws_od_cli configs --list'"
+            )
+        else:
+            f = files.pop(idx_to_remove)
+            save()
+            print(f"Removed file {remove_id}: {f['name']}")
+
+    if list:
+        rows = []
+        for f in files:
+            rows.append(
+                {
+                    "Id": f["id"],
+                    "Name": f["name"],
+                    "Path": f'{f["source_path"]} -> {f["dest_path"]}',
+                }
+            )
+        if len(rows) == 0:
+            print("No files yet, use 'aws_od_cli configs --add <some file>")
+        else:
+            print(tabulate.tabulate([d.values() for d in rows], headers=rows[0].keys()))
+
+
+@click.option("--full", is_flag=True, help="Show more info")
+@cli.command()
+def list(full):
     """
     List all your on-demands
     """
+    init()
+
     user_instances = get_instances_for_user(username())
+
+    with open(INSTANCES_PATH, "r") as f:
+        saved_instances = json.load(f)
 
     rows = []
     for instance in user_instances:
         state = instance["State"]["Name"]
         if state == "terminated":
             continue
-        rows.append(
-            {
-                "Name": get_name(instance),
-                "Status": instance["State"]["Name"],
-                "Id": instance["InstanceId"],
-                "Launched": instance["LaunchTime"]
-                .astimezone()
-                .strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        )
+
+        data = {
+            "Name": get_name(instance),
+            "Status": instance["State"]["Name"],
+            "Launched": instance["LaunchTime"]
+            .astimezone()
+            .strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        if full:
+            id = instance["InstanceId"]
+            data["Instance Id"] = id
+            data["DNS"] = instance["PublicDnsName"]
+
+            if id in saved_instances:
+                data["Key File"] = str(saved_instances[id]["key_path"])
+            else:
+                data["Key File"] = "<unknown>"
+
+        rows.append(data)
 
     if len(rows) == 0:
         print("No on-demands found! Start one with 'aws_od_cli create'")

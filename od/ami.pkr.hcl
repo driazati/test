@@ -37,6 +37,10 @@ build {
     "source.amazon-ebs.ubuntu"
   ]
 
+  provisioner "file"{
+    source = "code.zip"
+    destination = "/home/ubuntu/code.zip"
+  }
 
   provisioner "shell" {
     environment_vars = [

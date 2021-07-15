@@ -9,9 +9,9 @@ setup(
     entry_points={"console_scripts": ["aws_od_cli = aws_od_cli:cli"]},
     python_requires=">=3.7",
     install_requires=[
-        "click",
-        "boto3",
-        "tabulate",
-        "yaspin",
+        "click==7.0",
+        "boto3==1.16.52",
+        "tabulate==0.8.9",
+        "yaspin==2.0.0",
     ],
 )
