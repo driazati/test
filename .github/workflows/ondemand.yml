@@ -24,18 +24,21 @@ jobs:
           aws --help
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
-      - name: Build
+      # - name: Build
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #   run: |
+      #     set -eux
+      #     cd od
+      #     packer init .
+
+      #     echo done initializing
+      #     packer build ami.pkr.hcl
+      - name: Enable fast restore on new AMI
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          set -eux
-          cd od
-          packer init .
-
-          echo done initializing
-          packer build ami.pkr.hcl
-      - name: Enable fast restore on new AMI
         run: |
           set -eux
           SNAPSHOT_ID=$(aws --region us-west-2 ec2 describe-snapshots --filters 'Name=tag-key,Values=ondemand' | jq -r '.Snapshots[0]["SnapshotId"]')
