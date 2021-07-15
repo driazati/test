@@ -8,7 +8,7 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "learn-packer-linux-aws"
+  ami_name      = "pytorch-ondemand-ami"
   force_deregister = true
   instance_type = "c5a.4xlarge"
   region        = "us-west-2"
