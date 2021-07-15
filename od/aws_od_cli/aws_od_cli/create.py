@@ -7,7 +7,7 @@ import subprocess
 import yaspin
 
 from pathlib import Path
-from typing import Dict, Any, Optional, cast, Tuple, List
+from typing import Dict, Any, cast, Tuple, List
 
 from .utils import (
     SOCKETS_DIR,
@@ -176,7 +176,7 @@ def wait_for_ip_address(instance: Dict[str, Any]) -> Dict[str, Any]:
             )
 
     if fresh_instance is None:
-        raise RuntimeError(f"Instance should not be None")
+        raise RuntimeError("Instance should not be None")
     return fresh_instance
 
 

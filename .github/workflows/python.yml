@@ -7,7 +7,7 @@ on:
       - 'od/**'
 
 concurrency: 
-  group: ondemand-ami-push
+  group: lint
   cancel-in-progress: true
 
 jobs:
