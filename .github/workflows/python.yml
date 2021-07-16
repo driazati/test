@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install dependencies
         run: |
-          pip install flake8 mypy
+          pip install flake8==3.8.2 mypy==0.812
       - name: Flake8
         run: |
           set -eux
@@ -27,4 +27,4 @@ jobs:
         run: |
           set -eux
           cd od/aws_od_cli
-          mypy
+          mypy --config mypy.ini
