@@ -34,7 +34,7 @@ def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
 
 
-def ec2() -> botocore.client.EC2:
+def ec2() -> Any:
     if "ec2" not in clients:
         clients["ec2"] = boto3.client("ec2", region_name="us-west-2")
 
