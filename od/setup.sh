@@ -6,7 +6,7 @@ lsb_release -a
 # Wait for background stuff to finish before launching apt
 /usr/bin/cloud-init status --wait
 sudo apt update
-sudo apt install -y build-essential clang git ccache unzip zip ncdu fish silversearcher-ag ripgrep jq
+sudo apt install -y build-essential clang git ccache unzip zip ncdu fish silversearcher-ag ripgrep jq tmux
 
 # Install clangd
 curl -LO https://github.com/clangd/clangd/releases/download/11.0.0/clangd-linux-11.0.0.zip
@@ -26,6 +26,7 @@ mkdir -p .vscode-server/bin
 pushd .vscode-server/bin
 tar -xvzf ~/vscode.tar.gz --strip-components 1
 popd
+rm vscode.tar.gz
 
 # Set up VSCode extensions
 mkdir -p .vscode-server/extensions
@@ -87,6 +88,5 @@ make setup_lint
 
 # gh config set -h github.com git_protocol https
 
-# Build PyTorch
-python setup.py develop
+
 

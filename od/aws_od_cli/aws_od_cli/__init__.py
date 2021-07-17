@@ -62,8 +62,9 @@ def cli() -> None:
 @click.option(
     "--rm", is_flag=True, help="stop the on-demand once the SSH session is exited"
 )
+@click.option("--gpu", is_flag=True, help="make GPU instance")
 @cli.command()
-def create(no_login: bool, no_files: bool, rm: bool) -> None:
+def create(no_login: bool, no_files: bool, rm: bool, gpu: bool) -> None:
     """
     Create a new on-demand
 
@@ -74,10 +75,13 @@ def create(no_login: bool, no_files: bool, rm: bool) -> None:
         raise RuntimeError(
             "--rm can only be used when auto-ssh is enabled, so remove the --no-login flag"
         )
+    instance_type = "c5a.4xlarge"
+    if gpu:
+        instance_type = "g4dn.8xlarge"
 
     ami = find_ami()
     key_path = find_or_create_ssh_key()
-    instances, name = create_instance(ami, key_path)
+    instances, name = create_instance(ami, key_path, instance_type)
     instance = instances["Instances"][0]
 
     save_instance(instance, key_path)

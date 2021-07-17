@@ -8,17 +8,19 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "pytorch-ondemand-ami"
+  ami_name      = "pytorch-ondemand-ami-gpu"
   force_deregister = true
-  instance_type = "c5a.4xlarge"
+  instance_type = "g4dn.8xlarge"
   region        = "us-west-2"
 
   force_delete_snapshot = true
   snapshot_tags = {
     "ondemand": "gha-packer"
+    "type": "gpu"
   }
   tags = {
     "ondemand": "gha-packer"
+    "type": "gpu"
   }
 
   # ubuntu 20.04 server
@@ -40,6 +42,7 @@ build {
   provisioner "shell" {
     scripts = [
       "setup.sh",
+      "gpu.sh",
       "build.sh"
     ]
   }

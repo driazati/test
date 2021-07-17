@@ -96,7 +96,7 @@ def gen_startup_script() -> str:
     )
 
 
-def create_instance(ami: Dict[str, Any], key_path: Path) -> Tuple[Dict[str, Any], str]:
+def create_instance(ami: Dict[str, Any], key_path: Path, instance_type: str) -> Tuple[Dict[str, Any], str]:
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
         user_instances = get_instances_for_user(username())
         existing_names = [get_name(instance) for instance in user_instances]
@@ -127,7 +127,7 @@ def create_instance(ami: Dict[str, Any], key_path: Path) -> Tuple[Dict[str, Any]
             MinCount=1,
             MaxCount=1,
             KeyName=key_path.name,
-            InstanceType="c5a.4xlarge",
+            InstanceType=instance_type,
             UserData=gen_startup_script(),
             TagSpecifications=[
                 {
