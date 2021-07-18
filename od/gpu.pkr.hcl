@@ -27,7 +27,7 @@ source "amazon-ebs" "ubuntu-gpu" {
 
 build {
   sources = [
-    "source.amazon-ebs.ubuntu"
+    "source.amazon-ebs.ubuntu-gpu"
   ]
 
   provisioner "shell" {
