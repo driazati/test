@@ -1,4 +1,4 @@
-source "amazon-ebs" "ubuntu" {
+source "amazon-ebs" "ubuntu-gpu" {
   ami_name      = "pytorch-ondemand-ami-gpu"
   force_deregister = true
   instance_type = "g4dn.8xlarge"
@@ -6,11 +6,11 @@ source "amazon-ebs" "ubuntu" {
 
   force_delete_snapshot = true
   snapshot_tags = {
-    "ondemand": "gha-packer"
+    "ondemand": "gha-packer-gpu"
     "type": "gpu"
   }
   tags = {
-    "ondemand": "gha-packer"
+    "ondemand": "gha-packer-gpu"
     "type": "gpu"
   }
 
