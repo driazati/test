@@ -5,6 +5,8 @@ on:
       - master
     paths:
       - 'od/ami.pkr.hcl'
+      - 'od/gpu.pkr.hcl'
+      - 'od/*.sh'
       - '.github/workflows/ondemand.yml'
 
 concurrency: 
