@@ -6,7 +6,6 @@ import boto3
 import json
 import random
 import string
-import botocore
 import yaspin
 
 from pathlib import Path
