@@ -61,6 +61,8 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_MAX_ATTEMPTS: 100
+          AWS_POLL_DELAY_SECONDS: 60
         run: |
           set -eux
           cd od
