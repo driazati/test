@@ -54,7 +54,7 @@ def cli() -> None:
 
 
 @cli.command()
-def sync():
+def sync() -> None:
     """
     Clear SSH config to match local state to what's in AWS
 
@@ -117,7 +117,7 @@ def create(
         instance_type = user_instance_type
 
     if user_ami is not None:
-        ami = user_ami
+        ami = {"ImageId": user_ami}
     else:
         ami = find_ami(gpu=gpu)
 
@@ -211,7 +211,7 @@ def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> Non
     if folder is None:
         folder = "/home/ubuntu/pytorch"
     subprocess.run(
-        [code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}",]
+        [code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"]
     )
 
 

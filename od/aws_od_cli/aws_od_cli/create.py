@@ -128,7 +128,7 @@ def create_instance(
                     },
                 },
             ],
-            Placement={"AvailabilityZone": "us-west-2a",},
+            Placement={"AvailabilityZone": "us-west-2a"},
             ImageId=ami["ImageId"],
             MinCount=1,
             MaxCount=1,
@@ -255,7 +255,7 @@ def add_ssh_config_include() -> None:
         f.write(content)
 
 
-def write_ssh_configs(instance) -> None:
+def write_ssh_configs(instance: Dict[str, Any]) -> None:
     add_ssh_config_include()
 
     def gen_ssh_config(name: str, hostname: str, key: Path) -> str:
