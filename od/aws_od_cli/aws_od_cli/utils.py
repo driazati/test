@@ -106,7 +106,7 @@ def gen_config() -> Dict[str, Any]:
 
     if not CONFIG_FILE_PATH.exists():
         with open(CONFIG_FILE_PATH, "w") as f:
-            json.dump({}, f)
+            json.dump({}, f, indent=2)
 
     with open(CONFIG_FILE_PATH, "r") as f:
         config = json.load(f)
@@ -117,7 +117,7 @@ def gen_config() -> Dict[str, Any]:
             config[name] = input()
 
     with open(CONFIG_FILE_PATH, "w") as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=2)
 
     return cast(Dict[str, Any], config)
 
@@ -126,7 +126,7 @@ def save_config(name: str, value: str) -> None:
     config = gen_config()
     config[name] = value
     with open(CONFIG_FILE_PATH, "w") as f:
-        json.dump(config, f)
+        json.dump(config, f, indent=2)
 
 
 def username() -> str:
@@ -250,7 +250,7 @@ def init() -> None:
 
     if not FILES_PATH.exists():
         with open(FILES_PATH, "w") as f:
-            json.dump([], f)
+            json.dump([], f, indent=2)
 
     if not SSH_CONFIG_PATH.exists():
         with open(SSH_CONFIG_PATH, "w") as f:

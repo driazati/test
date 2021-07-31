@@ -69,7 +69,7 @@ def gen_startup_script() -> str:
     pytorch_fork = ""
     if config.get("pytorch_fork", "").strip() != "":
         pytorch_fork = f"""
-        git add remote me {config['pytorch_fork']}
+        git remote add me https://{config['github_username']}:{config['github_oauth']}@github.com/{config['pytorch_fork']}.git
         """
 
     parts = [
@@ -103,7 +103,8 @@ def gen_startup_script() -> str:
         """,
     ]
     parts = [textwrap.dedent(part).strip() for part in parts]
-    return "\n".join(parts) + "\n"
+    script = "\n".join(parts) + "\n"
+    return script
 
 
 def create_instance(

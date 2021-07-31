@@ -16,7 +16,7 @@ def load_files() -> List[Dict[str, Any]]:
 
 def save_files(files: List[Dict[str, Any]]) -> None:
     with open(FILES_PATH, "w") as f:
-        json.dump(files, f)
+        json.dump(files, f, indent=2)
 
 
 def gen_source_path(file: Path) -> Path:
