@@ -64,11 +64,16 @@ def find_or_create_ssh_key() -> Path:
 def gen_startup_script() -> str:
     config = gen_config()
     # Install user specific things
-    # (oauth token for pushes)
-    # user files
-    return (
-        textwrap.dedent(
-            f"""
+    # * oauth token for pushes
+    # * user files
+    pytorch_fork = ""
+    if config.get("pytorch_fork", "").strip() != "":
+        pytorch_fork = f"""
+        git add remote me {config['pytorch_fork']}
+        """
+
+    parts = [
+        f"""
         #!/bin/bash
         su ubuntu
 
@@ -89,18 +94,24 @@ def gen_startup_script() -> str:
 
         cd /home/ubuntu/pytorch
         sudo -u ubuntu git remote set-url origin https://{config['github_username']}:{config['github_oauth']}@github.com/pytorch/pytorch.git
-
+        """,
+        pytorch_fork,
+        f"""
         sudo -u ubuntu bash -c 'export PATH="/home/ubuntu/miniconda3/bin:$PATH" && echo {config['github_oauth']} | gh auth login --with-token'
 
         echo done > /home/ubuntu/.done.log
-    """
-        ).strip()
-        + "\n"
-    )
+        """,
+    ]
+    parts = [textwrap.dedent(part).strip() for part in parts]
+    return "\n".join(parts) + "\n"
 
 
 def create_instance(
-    ami: Dict[str, Any], key_path: Path, instance_type: str, use_startup_script: bool
+    ami: Dict[str, Any],
+    key_path: Path,
+    instance_type: str,
+    use_startup_script: bool,
+    volume_size: int,
 ) -> Tuple[Dict[str, Any], str]:
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
         user_instances = get_instances_for_user(username())
@@ -123,7 +134,7 @@ def create_instance(
                     "DeviceName": "/dev/sda1",
                     "Ebs": {
                         "DeleteOnTermination": True,
-                        "VolumeSize": 50,
+                        "VolumeSize": volume_size,
                         "VolumeType": "gp2",
                     },
                 },

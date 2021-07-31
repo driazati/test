@@ -73,19 +73,20 @@ def sync() -> None:
 
 
 @click.option(
-    "--no-login", is_flag=True, help="skip automatic SSH once on-demand is up"
+    "--no-login", is_flag=True, help="Skip automatic SSH once on-demand is up"
 )
 @click.option(
-    "--no-files", is_flag=True, help="skip copying files from 'aws_od_cli configs'"
+    "--no-files", is_flag=True, help="Skip copying files from 'aws_od_cli configs'"
 )
 @click.option(
-    "--rm", is_flag=True, help="stop the on-demand once the SSH session is exited"
+    "--rm", is_flag=True, help="Stop the on-demand once the SSH session is exited"
 )
-@click.option("--gpu", is_flag=True, help="make GPU instance")
+@click.option("--gpu", is_flag=True, help="Make default GPU instance")
 @click.option(
-    "--instance-type", "user_instance_type", help="directly specify instance type"
+    "--instance-type", "user_instance_type", help="Directly specify instance type"
 )
-@click.option("--ami", "user_ami", help="directly specify instance type")
+@click.option("--ami", "user_ami", help="Directly specify AMI")
+@click.option("--volume_size", type=int, default=50, help="Instance volume size in GB")
 @cli.command()
 def create(
     no_login: bool,
@@ -94,6 +95,7 @@ def create(
     gpu: bool,
     user_ami: Optional[str],
     user_instance_type: Optional[str],
+    volume_size: int,
 ) -> None:
     """
     Create a new on-demand
@@ -124,7 +126,7 @@ def create(
     key_path = find_or_create_ssh_key()
     # Make the instance via boto3
     instances, name = create_instance(
-        ami, key_path, instance_type, use_startup_script=not no_files
+        ami, key_path, instance_type, use_startup_script=not no_files, volume_size=volume_size
     )
     instance = instances["Instances"][0]
 
