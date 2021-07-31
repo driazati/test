@@ -27,6 +27,7 @@ def get_live_ondemands(full: bool) -> List[Dict[str, Any]]:
             id = instance["InstanceId"]
             data["Instance Id"] = id
             data["DNS"] = instance["PublicDnsName"]
+            data["Type"] = instance["InstanceType"]
             data["Key File"] = str(find_key(instance["KeyName"]))
 
         rows.append(data)
