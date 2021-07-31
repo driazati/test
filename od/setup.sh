@@ -6,7 +6,16 @@ lsb_release -a
 # Wait for background stuff to finish before launching apt
 /usr/bin/cloud-init status --wait
 sudo apt update
-sudo apt install -y build-essential clang git ccache unzip zip ncdu fish silversearcher-ag ripgrep jq tmux
+sudo apt install -y build-essential clang git ccache unzip zip ncdu fish awscli docker.io silversearcher-ag ripgrep jq tmux gron
+
+# Install fzf (use from source install since it installs key bindings too)
+git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+~/.fzf/install --key-bindings --completion --update-rc
+
+# Install fish utils
+fish -c 'curl -sL https://git.io/fisher | source && fisher install jorgebucaran/fisher'
+fish -c 'fisher install edc/bass' 
+
 
 # Install clangd
 curl -LO https://github.com/clangd/clangd/releases/download/11.0.0/clangd-linux-11.0.0.zip

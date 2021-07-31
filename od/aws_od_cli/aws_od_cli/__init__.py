@@ -30,6 +30,8 @@ from aws_od_cli.utils import (
     FILES_PATH,
     get_instances_for_user,
     username,
+    save_config,
+    gen_config,
 )
 from aws_od_cli.list import get_live_ondemands
 from aws_od_cli.configs import add_file, remove_file, list_files
@@ -79,7 +81,9 @@ def sync() -> None:
     "--no-files", is_flag=True, help="Skip copying files from 'aws_od_cli configs'"
 )
 @click.option(
-    "--rm", is_flag=True, help="Stop the on-demand once the SSH session is exited"
+    "--no-rm",
+    is_flag=True,
+    help="Don't stop the on-demand once the SSH session is exited",
 )
 @click.option("--gpu", is_flag=True, help="Make default GPU instance")
 @click.option(
@@ -91,7 +95,7 @@ def sync() -> None:
 def create(
     no_login: bool,
     no_files: bool,
-    rm: bool,
+    no_rm: bool,
     gpu: bool,
     user_ami: Optional[str],
     user_instance_type: Optional[str],
@@ -103,6 +107,7 @@ def create(
     TODO: this doesn't work when Packer is updating the AMI (since it goes into
     pending status), there should be a fallback AMI that's the old one
     """
+    rm = not no_rm
     if no_login and rm:
         raise RuntimeError(
             "--rm can only be used when auto-ssh is enabled, so remove the --no-login flag"
@@ -126,7 +131,11 @@ def create(
     key_path = find_or_create_ssh_key()
     # Make the instance via boto3
     instances, name = create_instance(
-        ami, key_path, instance_type, use_startup_script=not no_files, volume_size=volume_size
+        ami,
+        key_path,
+        instance_type,
+        use_startup_script=not no_files,
+        volume_size=volume_size,
     )
     instance = instances["Instances"][0]
 
@@ -155,16 +164,21 @@ def create(
             )
         )
     else:
+        login_command = gen_config().get("login_command", None)
         cmd = [
             "ssh",
             "-o",
             "StrictHostKeyChecking=no",
             ssh_dest,
         ]
+        if login_command is not None:
+            cmd += [x.strip() for x in login_command.split(",")]
         subprocess.run(cmd)
 
         if rm:
-            ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
+            with yaspin.yaspin(text="Stopping instance") as spinner:
+                ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
+                ok(spinner)
 
 
 @click.option("--name")
@@ -233,10 +247,11 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
 
 
 @click.option("--add")
+@click.option("--login-command")
 @click.option("--remove-id")
 @click.option("--list", is_flag=True)
 @cli.command()
-def configs(add: Optional[str], remove_id: Optional[str], list: bool) -> None:
+def configs(add: Optional[str], login_command: Optional[str], remove_id: Optional[str], list: bool) -> None:
     """
     Manage files to copy to on-demand instances (dotfiles, etc)
     """
@@ -245,6 +260,9 @@ def configs(add: Optional[str], remove_id: Optional[str], list: bool) -> None:
 
     if remove_id is not None:
         remove_file(id=remove_id)
+
+    if login_command is not None:
+        save_config(name='login_command', value=login_command)
 
     if list:
         rows = list_files()
@@ -257,6 +275,9 @@ def configs(add: Optional[str], remove_id: Optional[str], list: bool) -> None:
                     [d.values() for d in rows], headers=[k for k in rows[0].keys()]
                 )
             )
+        login_command = gen_config().get("login_command", None)
+        if login_command is not None:
+            print(f"Login command: {login_command.split(',')}")
 
 
 @click.option("--full", is_flag=True, help="Show more info about each on-demand")
