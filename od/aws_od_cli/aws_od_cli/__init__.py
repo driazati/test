@@ -18,8 +18,8 @@ from aws_od_cli.create import (
     copy_files,
 )
 from aws_od_cli.utils import (
+    SSH_CONFIG_PATH,
     init,
-    save_instance,
     ec2,
     instance_for_id_or_name,
     instance_for_id_or_name_or_guess,
@@ -53,6 +53,25 @@ def cli() -> None:
     init()
 
 
+@cli.command()
+def sync():
+    """
+    Clear SSH config to match local state to what's in AWS
+
+    1. Clean out stale entries from ~/.pytorch-ondemands/instances.json
+    2. Clean out stale entries from ~/.pytorch-ondemands/ssh_config
+    """
+    instances = get_instances_for_user(username())
+    with open(SSH_CONFIG_PATH, "w") as f:
+        f.write("")
+
+    for instance in instances:
+        if instance["State"]["Name"] == "running":
+            write_ssh_configs(instance)
+
+    print(f"Synced {SSH_CONFIG_PATH}")
+
+
 @click.option(
     "--no-login", is_flag=True, help="skip automatic SSH once on-demand is up"
 )
@@ -63,8 +82,19 @@ def cli() -> None:
     "--rm", is_flag=True, help="stop the on-demand once the SSH session is exited"
 )
 @click.option("--gpu", is_flag=True, help="make GPU instance")
+@click.option(
+    "--instance-type", "user_instance_type", help="directly specify instance type"
+)
+@click.option("--ami", "user_ami", help="directly specify instance type")
 @cli.command()
-def create(no_login: bool, no_files: bool, rm: bool, gpu: bool) -> None:
+def create(
+    no_login: bool,
+    no_files: bool,
+    rm: bool,
+    gpu: bool,
+    user_ami: Optional[str],
+    user_instance_type: Optional[str],
+) -> None:
     """
     Create a new on-demand
 
@@ -76,22 +106,33 @@ def create(no_login: bool, no_files: bool, rm: bool, gpu: bool) -> None:
             "--rm can only be used when auto-ssh is enabled, so remove the --no-login flag"
         )
     instance_type = "c5a.4xlarge"
+    if gpu and user_instance_type is not None:
+        raise RuntimeError("Cannot use both --gpu and --instance-type")
+    if gpu and user_ami is not None:
+        raise RuntimeError("Cannot use both --gpu and --ami")
+
     if gpu:
         instance_type = "g4dn.8xlarge"
+    if user_instance_type is not None:
+        instance_type = user_instance_type
 
-    ami = find_ami()
+    if user_ami is not None:
+        ami = user_ami
+    else:
+        ami = find_ami(gpu=gpu)
+
     key_path = find_or_create_ssh_key()
-    instances, name = create_instance(ami, key_path, instance_type)
+    # Make the instance via boto3
+    instances, name = create_instance(
+        ami, key_path, instance_type, use_startup_script=not no_files
+    )
     instance = instances["Instances"][0]
 
-    save_instance(instance, key_path)
-
+    # Get it's DNS name and write it to an SSH config for later access
     instance = wait_for_ip_address(instance)
+    write_ssh_configs(instance)
 
-    # Re-save to get DNS name in
-    save_instance(instance, key_path)
-    write_ssh_configs()
-
+    # Spin until ssh <instance-id> runs successfully
     instance = wait_for_ssh_access(instance)
     ssh_dest = instance["InstanceId"]
 
@@ -155,8 +196,9 @@ def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None
 
 @click.option("--id")
 @click.option("--name")
+@click.option("--folder")
 @cli.command()
-def vscode(id: Optional[str], name: Optional[str]) -> None:
+def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> None:
     """
     Launch vscode for a remote
 
@@ -166,12 +208,10 @@ def vscode(id: Optional[str], name: Optional[str]) -> None:
     code_exe = locate_vscode()
     instance = instance_for_id_or_name_or_guess(id, name)
     name = instance["InstanceId"]
+    if folder is None:
+        folder = "/home/ubuntu/pytorch"
     subprocess.run(
-        [
-            code_exe,
-            "--folder-uri",
-            f"vscode-remote://ssh-remote+{name}/home/ubuntu/pytorch",
-        ]
+        [code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}",]
     )
 
 

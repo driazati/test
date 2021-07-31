@@ -15,9 +15,9 @@ from .utils import (
     create_key_pair,
     ec2,
     fail,
+    find_key,
     gen_config,
     gen_key_path,
-    gen_saved_instances,
     get_instances_for_user,
     get_name,
     instance_by_id,
@@ -26,12 +26,15 @@ from .utils import (
 )
 
 
-def find_ami() -> Dict[str, Any]:
+def find_ami(gpu: bool) -> Dict[str, Any]:
     ami = None
+    ami_name = "pytorch-ondemand-ami"
+    if gpu:
+        ami_name = "pytorch-ondemand-ami-gpu"
     with yaspin.yaspin(text="Finding recent AMI") as spinner:
         amis = ec2().describe_images(Owners=["self"])
         for image in amis["Images"]:
-            if image["Name"] == "pytorch-ondemand-ami":
+            if image["Name"] == ami_name:
                 ami = image
                 break
 
@@ -96,7 +99,9 @@ def gen_startup_script() -> str:
     )
 
 
-def create_instance(ami: Dict[str, Any], key_path: Path, instance_type: str) -> Tuple[Dict[str, Any], str]:
+def create_instance(
+    ami: Dict[str, Any], key_path: Path, instance_type: str, use_startup_script: bool
+) -> Tuple[Dict[str, Any], str]:
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
         user_instances = get_instances_for_user(username())
         existing_names = [get_name(instance) for instance in user_instances]
@@ -123,12 +128,13 @@ def create_instance(ami: Dict[str, Any], key_path: Path, instance_type: str) -> 
                     },
                 },
             ],
+            Placement={"AvailabilityZone": "us-west-2a",},
             ImageId=ami["ImageId"],
             MinCount=1,
             MaxCount=1,
             KeyName=key_path.name,
             InstanceType=instance_type,
-            UserData=gen_startup_script(),
+            UserData=gen_startup_script() if use_startup_script else "",
             TagSpecifications=[
                 {
                     "ResourceType": "instance",
@@ -156,7 +162,8 @@ def wait_for_ip_address(instance: Dict[str, Any]) -> Dict[str, Any]:
         while i < 100:
             fresh_instance = instance_by_id(id)
             if fresh_instance is None:
-                raise RuntimeError(f"Expected instance {id} to exist")
+                continue
+                # raise RuntimeError(f"Expected instance {id} to exist")
             if fresh_instance["PublicDnsName"].strip() != "":
                 conditions["ip"] = True
                 # break
@@ -248,7 +255,7 @@ def add_ssh_config_include() -> None:
         f.write(content)
 
 
-def write_ssh_configs() -> None:
+def write_ssh_configs(instance) -> None:
     add_ssh_config_include()
 
     def gen_ssh_config(name: str, hostname: str, key: Path) -> str:
@@ -265,12 +272,14 @@ def write_ssh_configs() -> None:
         """
         ).strip()
 
-    saved_instances = gen_saved_instances()
     output = ""
-    for instance, data in saved_instances.items():
-        output += (
-            gen_ssh_config(instance, data["hostname"], Path(data["key_path"])) + "\n\n"
-        )
+    if instance["PublicDnsName"].strip() == "":
+        raise RuntimeError("Could not add instance since hostname was empty")
+
+    key = find_key(instance["KeyName"])
+    output += (
+        gen_ssh_config(instance["InstanceId"], instance["PublicDnsName"], key) + "\n\n"
+    )
 
     with open(SSH_CONFIG_PATH, "w") as f:
         f.write(output)

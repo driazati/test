@@ -15,7 +15,6 @@ from typing import List, Dict, Any, Optional, cast
 HOME_DIR = Path(os.path.expanduser("~"))
 CONFIG_PATH = HOME_DIR / ".pytorch-ondemand"
 KEY_PATH = CONFIG_PATH / "keys"
-INSTANCES_PATH = CONFIG_PATH / "instances.json"
 CONFIG_FILE_PATH = CONFIG_PATH / "config.json"
 SSH_CONFIG_PATH = CONFIG_PATH / "ssh_config"
 SOCKETS_DIR = CONFIG_PATH / "sockets"
@@ -31,6 +30,14 @@ def fail(spinner: yaspin.Spinner) -> None:
 
 def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
+
+
+def find_key(key_name: str) -> Path:
+    expected_key_path = KEY_PATH / key_name
+    if not expected_key_path.exists():
+        raise RuntimeError(f"Unable to find key {key_name}")
+
+    return expected_key_path.resolve()
 
 
 def ec2() -> Any:
@@ -233,19 +240,10 @@ def stop_instances(action: str, ids_to_stop: List[str]) -> None:
         ok(spinner)
 
 
-def gen_saved_instances() -> Dict[str, Any]:
-    with open(INSTANCES_PATH, "r") as f:
-        return cast(Dict[str, Any], json.load(f))
-
-
 def init() -> None:
     gen_config()
     if not KEY_PATH.exists():
         os.mkdir(KEY_PATH)
-
-    if not INSTANCES_PATH.exists():
-        with open(INSTANCES_PATH, "w") as f:
-            json.dump({}, f)
 
     if not FILES_DIR.exists():
         os.mkdir(FILES_DIR)
@@ -260,18 +258,3 @@ def init() -> None:
 
     if not SOCKETS_DIR.exists():
         os.mkdir(SOCKETS_DIR)
-
-
-def save_instance(instance: Dict[str, Any], key_path: Path) -> None:
-    with open(INSTANCES_PATH, "r") as f:
-        data = json.load(f)
-
-    id = instance["InstanceId"]
-    data[id] = {
-        "tags": instance["Tags"],
-        "hostname": instance["PublicDnsName"],
-        "key_path": str(key_path.resolve()),
-    }
-
-    with open(INSTANCES_PATH, "w") as f:
-        json.dump(data, f)

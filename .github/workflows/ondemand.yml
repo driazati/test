@@ -70,11 +70,11 @@ jobs:
 
           echo done initializing
           packer build gpu.pkr.hcl
-      - name: Enable fast restore on new AMI
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          set -eux
-          SNAPSHOT_ID=$(aws --region us-west-2 ec2 describe-snapshots --filters 'Name=tag-key,Values=ondemand' | jq -r '.Snapshots[0]["SnapshotId"]')
-          aws --region us-west-2 ec2 enable-fast-snapshot-restores --source-snapshot "$SNAPSHOT_ID" --availability-zones us-west-2a us-west-2b us-west-2c us-west-2d
+      # - name: Enable fast restore on new AMI
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #   run: |
+      #     set -eux
+      #     SNAPSHOT_ID=$(aws --region us-west-2 ec2 describe-snapshots --filters 'Name=tag-key,Values=ondemand' | jq -r '.Snapshots[0]["SnapshotId"]')
+      #     aws --region us-west-2 ec2 enable-fast-snapshot-restores --source-snapshot "$SNAPSHOT_ID" --availability-zones us-west-2a
