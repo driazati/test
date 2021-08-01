@@ -38,25 +38,32 @@ def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
 
 
-def init_logger():
+def init_logger() -> None:
     global logger
 
     name = f"rage-{datetime.datetime.now().isoformat()}"
     filename = LOGS_DIR / name
     logger = logging.getLogger("rage")
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    formatter = logging.Formatter(
+        fmt="%(asctime)s - %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
     # handler = logging.StreamHandler()
     handler = logging.FileHandler(filename)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
 
-def log(string):
+def log(string: str) -> None:
+    if logger is None:
+        raise RuntimeError("Call init_logger first")
+
     logger.info(string)
 
 
-def get_logger():
+def get_logger() -> logging.Logger:
+    if logger is None:
+        raise RuntimeError("Call init_logger first")
     return logger
 
 
@@ -284,6 +291,6 @@ def init() -> None:
             f.write("")
 
 
-def run_cmd(cmd: List[str]):
+def run_cmd(cmd: List[str]) -> subprocess.CompletedProcess[bytes]:
     log(f"Running {cmd}")
     return subprocess.run(cmd)

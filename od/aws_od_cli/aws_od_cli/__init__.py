@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional
+from typing import Optional, Any
 import click
 import textwrap
 import json
@@ -61,7 +61,7 @@ def cli() -> None:
     init()
     init_logger()
 
-    def exception_handler(exc_type, exc_value, exc_traceback):
+    def exception_handler(exc_type: Any, exc_value: Any, exc_traceback: Any) -> None:
         get_logger().error(
             "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
         )
@@ -256,7 +256,7 @@ def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> Non
     if folder is None:
         folder = "/home/ubuntu/pytorch"
 
-    run_cmd([code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"])
+    run_cmd([str(code_exe), "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"])
 
 
 @click.option("--id")
@@ -335,13 +335,13 @@ def list(full: bool) -> None:
 
 @click.option("--number", type=int, help="Number of recent logs to output", default=1)
 @cli.command()
-def rage(number) -> None:
+def rage(number: int) -> None:
     """
     Output logs from the most recent few runs
     """
     logs = LOGS_DIR.glob("rage-*")
     paths = [x for x in reversed(sorted(logs, key=os.path.getmtime))]
-    paths = paths[1:number + 1]
+    paths = paths[1 : number + 1]
     for x in paths:
         with open(x) as f:
             print(f.read())
