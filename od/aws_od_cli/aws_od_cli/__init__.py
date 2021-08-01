@@ -3,9 +3,10 @@
 from typing import Optional
 import click
 import textwrap
-import subprocess
 import json
 import tabulate
+import sys
+import os
 import yaspin
 
 from aws_od_cli.create import (
@@ -28,10 +29,15 @@ from aws_od_cli.utils import (
     fail,
     locate_vscode,
     FILES_PATH,
+    LOGS_DIR,
     get_instances_for_user,
     username,
     save_config,
     gen_config,
+    log,
+    init_logger,
+    run_cmd,
+    get_logger,
 )
 from aws_od_cli.list import get_live_ondemands
 from aws_od_cli.configs import add_file, remove_file, list_files
@@ -53,6 +59,16 @@ def cli() -> None:
     be lost). TODO: This is unimplemented
     """
     init()
+    init_logger()
+
+    def exception_handler(exc_type, exc_value, exc_traceback):
+        get_logger().error(
+            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = exception_handler
+    log(f"Invoked with: {sys.argv}")
 
 
 @cli.command()
@@ -60,8 +76,8 @@ def sync() -> None:
     """
     Clear SSH config to match local state to what's in AWS
 
-    1. Clean out stale entries from ~/.pytorch-ondemands/instances.json
-    2. Clean out stale entries from ~/.pytorch-ondemands/ssh_config
+    1. Clean out stale entries from ~/.aws_od_cli/instances.json
+    2. Clean out stale entries from ~/.aws_od_cli/ssh_config
     """
     instances = get_instances_for_user(username())
     with open(SSH_CONFIG_PATH, "w") as f:
@@ -123,12 +139,18 @@ def create(
     if user_instance_type is not None:
         instance_type = user_instance_type
 
+    log(f"Using instance_type {instance_type}")
+
     if user_ami is not None:
         ami = {"ImageId": user_ami}
     else:
         ami = find_ami(gpu=gpu)
 
+    log(f"Using ami {ami}")
+
     key_path = find_or_create_ssh_key()
+    log(f"Using key {key_path}")
+
     # Make the instance via boto3
     instances, name = create_instance(
         ami,
@@ -139,6 +161,8 @@ def create(
     )
     instance = instances["Instances"][0]
 
+    log(f"Made instance {instance}")
+
     # Get it's DNS name and write it to an SSH config for later access
     instance = wait_for_ip_address(instance)
     write_ssh_configs(instance)
@@ -146,6 +170,8 @@ def create(
     # Spin until ssh <instance-id> runs successfully
     instance = wait_for_ssh_access(instance)
     ssh_dest = instance["InstanceId"]
+
+    log(f"Using SSH destination {ssh_dest}")
 
     if not no_files:
         with open(FILES_PATH, "r") as f:
@@ -173,7 +199,7 @@ def create(
         ]
         if login_command is not None:
             cmd += [x.strip() for x in login_command.split(",")]
-        subprocess.run(cmd)
+        run_cmd(cmd)
 
         if rm:
             with yaspin.yaspin(text="Stopping instance") as spinner:
@@ -195,6 +221,7 @@ def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None
         user_instances = get_instances_for_user(username())
         ids_to_stop = []
         if all:
+            log("Stopping all instances")
             for instance in user_instances:
                 ids_to_stop.append(instance["InstanceId"])
         else:
@@ -207,6 +234,7 @@ def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None
 
         ok(spinner)
 
+    log(f"Setting instances {ids_to_stop} to {action}")
     stop_instances(action, ids_to_stop)
 
 
@@ -222,13 +250,13 @@ def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> Non
     Also see 'aws_od_cli list'.
     """
     code_exe = locate_vscode()
+    log(f"Found VSCode at {code_exe}")
     instance = instance_for_id_or_name_or_guess(id, name)
     name = instance["InstanceId"]
     if folder is None:
         folder = "/home/ubuntu/pytorch"
-    subprocess.run(
-        [code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"]
-    )
+
+    run_cmd([code_exe, "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"])
 
 
 @click.option("--id")
@@ -243,7 +271,7 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
     """
     # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
-    subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"]])
+    run_cmd(["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"]])
 
 
 @click.option("--add")
@@ -251,7 +279,12 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
 @click.option("--remove-id")
 @click.option("--list", is_flag=True)
 @cli.command()
-def configs(add: Optional[str], login_command: Optional[str], remove_id: Optional[str], list: bool) -> None:
+def configs(
+    add: Optional[str],
+    login_command: Optional[str],
+    remove_id: Optional[str],
+    list: bool,
+) -> None:
     """
     Manage files to copy to on-demand instances (dotfiles, etc)
     """
@@ -262,7 +295,7 @@ def configs(add: Optional[str], login_command: Optional[str], remove_id: Optiona
         remove_file(id=remove_id)
 
     if login_command is not None:
-        save_config(name='login_command', value=login_command)
+        save_config(name="login_command", value=login_command)
 
     if list:
         rows = list_files()
@@ -286,7 +319,9 @@ def list(full: bool) -> None:
     """
     List all your on-demands
     """
+    log(f"Fetching full: {full}")
     rows = get_live_ondemands(full=full)
+    log(f"{rows}")
 
     if len(rows) == 0:
         print("No on-demands found! Start one with 'aws_od_cli create'")
@@ -298,12 +333,18 @@ def list(full: bool) -> None:
         )
 
 
+@click.option("--number", type=int, help="Number of recent logs to output", default=1)
 @cli.command()
-def rage() -> None:
+def rage(number) -> None:
     """
     Output logs from the most recent few runs
     """
-    raise NotImplementedError()
+    logs = LOGS_DIR.glob("rage-*")
+    paths = [x for x in reversed(sorted(logs, key=os.path.getmtime))]
+    paths = paths[1:number + 1]
+    for x in paths:
+        with open(x) as f:
+            print(f.read())
 
 
 if __name__ == "__main__":

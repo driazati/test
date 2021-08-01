@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 
+import subprocess
 import sys
 import os
 import boto3
+import logging
 import json
 import random
 import string
+import datetime
 import yaspin
 
 from pathlib import Path
@@ -13,15 +16,18 @@ from typing import List, Dict, Any, Optional, cast
 
 
 HOME_DIR = Path(os.path.expanduser("~"))
-CONFIG_PATH = HOME_DIR / ".pytorch-ondemand"
+CONFIG_PATH = HOME_DIR / ".aws_od_cli"
 KEY_PATH = CONFIG_PATH / "keys"
 CONFIG_FILE_PATH = CONFIG_PATH / "config.json"
 SSH_CONFIG_PATH = CONFIG_PATH / "ssh_config"
 SOCKETS_DIR = CONFIG_PATH / "sockets"
 FILES_DIR = CONFIG_PATH / "files"
+LOGS_DIR = CONFIG_PATH / "logs"
 FILES_PATH = CONFIG_PATH / "files.json"
 
 clients = {}
+
+logger = None
 
 
 def fail(spinner: yaspin.Spinner) -> None:
@@ -30,6 +36,28 @@ def fail(spinner: yaspin.Spinner) -> None:
 
 def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
+
+
+def init_logger():
+    global logger
+
+    name = f"rage-{datetime.datetime.now().isoformat()}"
+    filename = LOGS_DIR / name
+    logger = logging.getLogger("rage")
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    # handler = logging.StreamHandler()
+    handler = logging.FileHandler(filename)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+
+def log(string):
+    logger.info(string)
+
+
+def get_logger():
+    return logger
 
 
 def find_key(key_name: str) -> Path:
@@ -242,11 +270,10 @@ def stop_instances(action: str, ids_to_stop: List[str]) -> None:
 
 def init() -> None:
     gen_config()
-    if not KEY_PATH.exists():
-        os.mkdir(KEY_PATH)
 
-    if not FILES_DIR.exists():
-        os.mkdir(FILES_DIR)
+    for path in [KEY_PATH, LOGS_DIR, FILES_DIR, SOCKETS_DIR]:
+        if not path.exists():
+            os.mkdir(path)
 
     if not FILES_PATH.exists():
         with open(FILES_PATH, "w") as f:
@@ -256,5 +283,7 @@ def init() -> None:
         with open(SSH_CONFIG_PATH, "w") as f:
             f.write("")
 
-    if not SOCKETS_DIR.exists():
-        os.mkdir(SOCKETS_DIR)
+
+def run_cmd(cmd: List[str]):
+    log(f"Running {cmd}")
+    return subprocess.run(cmd)

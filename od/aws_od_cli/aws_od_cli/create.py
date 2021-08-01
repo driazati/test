@@ -257,7 +257,7 @@ def add_ssh_config_include() -> None:
     with open(ssh_config, "r") as f:
         content = f.read()
 
-    line = "Include ~/.pytorch-ondemand/ssh_config"
+    line = "Include ~/.aws_od_cli/ssh_config"
     if line in content:
         return
 
