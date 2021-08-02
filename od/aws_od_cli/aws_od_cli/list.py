@@ -22,12 +22,17 @@ def get_live_ondemands(full: bool) -> List[Dict[str, Any]]:
             .strftime("%Y-%m-%d %H:%M:%S"),
         }
 
+        try:
+            key = find_key(instance["KeyName"])
+        except RuntimeError:
+            key = f'{instance["KeyName"]} - <unknown location>'
+
         if full:
             id = instance["InstanceId"]
             data["Instance Id"] = id
             data["DNS"] = instance["PublicDnsName"]
             data["Type"] = instance["InstanceType"]
-            data["Key File"] = str(find_key(instance["KeyName"]))
+            data["Key File"] = str(key)
 
         rows.append(data)
 

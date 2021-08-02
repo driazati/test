@@ -151,6 +151,7 @@ def create_instance(
                 {
                     "ResourceType": "instance",
                     "Tags": [
+                        {"Key": "Environment", "Value": "pytorch-ondemand"},
                         {"Key": "pytorch-ondemand", "Value": username()},
                         {"Key": "Name", "Value": name},
                     ],
