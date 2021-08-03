@@ -13,6 +13,7 @@ from aws_od_cli.create import (
     find_ami,
     find_or_create_ssh_key,
     create_instance,
+    find_security_group,
     wait_for_ip_address,
     wait_for_ssh_access,
     write_ssh_configs,
@@ -151,12 +152,16 @@ def create(
     key_path = find_or_create_ssh_key()
     log(f"Using key {key_path}")
 
+    # TODO: corp net sec group
+    security_group = find_security_group("ondemand_ssh_and_mosh")
+
     # Make the instance via boto3
     instances, name = create_instance(
         ami,
         key_path,
         instance_type,
         use_startup_script=not no_files,
+        security_group=security_group,
         volume_size=volume_size,
     )
     instance = instances["Instances"][0]
@@ -190,21 +195,25 @@ def create(
             )
         )
     else:
-        login_command = gen_config().get("login_command", None)
-        cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=no",
-            ssh_dest,
-        ]
-        if login_command is not None:
-            cmd += [x.strip() for x in login_command.split(",")]
-        run_cmd(cmd)
+        ssh_impl(ssh_dest)
 
         if rm:
             with yaspin.yaspin(text="Stopping instance") as spinner:
                 ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
                 ok(spinner)
+
+
+def ssh_impl(ssh_dest: str) -> None:
+    login_command = gen_config().get("login_command", None)
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        ssh_dest,
+    ]
+    if login_command is not None:
+        cmd += [x.strip() for x in login_command.split(",")]
+    run_cmd(cmd)
 
 
 @click.option("--name")
@@ -271,7 +280,7 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
     """
     # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
-    run_cmd(["ssh", "-o", "StrictHostKeyChecking=no", instance["InstanceId"]])
+    ssh_impl(instance["InstanceId"])
 
 
 @click.option("--add")

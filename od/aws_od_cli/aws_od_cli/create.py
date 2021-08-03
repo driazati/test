@@ -107,11 +107,31 @@ def gen_startup_script() -> str:
     return script
 
 
+def find_security_group(name: str) -> str:
+    with yaspin.yaspin(text="Finding security group") as spinner:
+        response = ec2().describe_security_groups(
+            Filters=[
+                {
+                    "Name": "tag:Name",
+                    "Values": [name]
+                }
+            ]
+        )
+        response = response["SecurityGroups"]
+        if len(response) == 0:
+            raise RuntimeError(f"Group {name} not found")
+
+        ok(spinner)
+    
+    return response[0]["GroupId"]
+
+
 def create_instance(
     ami: Dict[str, Any],
     key_path: Path,
     instance_type: str,
     use_startup_script: bool,
+    security_group: str,
     volume_size: int,
 ) -> Tuple[Dict[str, Any], str]:
     with yaspin.yaspin(text="Starting EC2 instance") as spinner:
@@ -158,8 +178,7 @@ def create_instance(
                 }
             ],
             Monitoring={"Enabled": False},
-            # # TODO: corp net sec group
-            SecurityGroupIds=["sg-00475f77ffc001e74"],  # SSH anywhere
+            SecurityGroupIds=[security_group],
         )
         ok(spinner)
 
