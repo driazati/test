@@ -6,7 +6,7 @@ lsb_release -a
 # Wait for background stuff to finish before launching apt
 /usr/bin/cloud-init status --wait
 sudo apt update
-sudo apt install -y build-essential clang git ccache unzip zip ncdu fish awscli docker.io silversearcher-ag ripgrep jq tmux gron
+sudo apt install -y build-essential clang git ccache unzip zip ncdu fish awscli docker.io silversearcher-ag ripgrep jq tmux gron mosh
 
 # Install fzf (use from source install since it installs key bindings too)
 git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
@@ -86,7 +86,7 @@ conda install --yes gh --channel conda-forge
 touch "$HOME/.hushlogin"
 
 # Install Python + PyTorch deps
-pip install cmake ninja ghstack
+pip install cmake ninja ghstack coverage
 python --version
 git clone https://github.com/pytorch/pytorch.git
 cd pytorch
