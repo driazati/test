@@ -90,12 +90,10 @@ pip install cmake ninja ghstack coverage
 python --version
 git clone https://github.com/pytorch/pytorch.git
 cd pytorch
+git fetch origin  # warm up ghstack
 pip install -r requirements.txt
 pip install -r requirements-flake8.txt
 pip install hypothesis flake8 requests py-spy
 make setup_lint
 
-# gh config set -h github.com git_protocol https
-
-
-
+gh config set -h github.com git_protocol https
