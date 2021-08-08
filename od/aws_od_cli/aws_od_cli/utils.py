@@ -39,11 +39,11 @@ def ok(spinner: yaspin.Spinner) -> None:
 
 
 class TimedText:
-    def __init__(self, text):
+    def __init__(self, text: str):
         self.text = text
         self.start = datetime.datetime.now()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         now = datetime.datetime.now()
         delta = now - self.start
         return f"{self.text} ({round(delta.total_seconds(), 1)}s)"
