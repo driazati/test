@@ -16,9 +16,9 @@ git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
 fish -c 'curl -sL https://git.io/fisher | source && fisher install jorgebucaran/fisher'
 fish -c 'fisher install edc/bass' 
 
-# Maybe speed up boot time?
-sudo systemctl disable snapd.refresh.service
-sudo systemctl disable NetworkManager-wait-online.service
+# # Maybe speed up boot time?
+# sudo systemctl disable snapd.refresh.service
+# sudo systemctl disable NetworkManager-wait-online.service
 
 
 # Install clangd
