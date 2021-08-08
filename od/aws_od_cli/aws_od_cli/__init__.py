@@ -198,9 +198,18 @@ def create(
         ssh_impl(ssh_dest)
 
         if rm:
-            with yaspin.yaspin(text="Stopping instance") as spinner:
-                ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
-                ok(spinner)
+            print("Delete this instance? (y/n): ", end="")
+            response = input().lower()
+            if response in {"y", "yes", "ok"}:
+                with yaspin.yaspin(text="Stopping instance") as spinner:
+                    ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
+                    ok(spinner)
+            else:
+                print(
+                    "Manual actions:\n"
+                    f"    SSH: 'aws_od_cli ssh --name {name}'\n"
+                    f" Remove: 'aws_od_cli stop --name {name}'\n"
+                )
 
 
 def ssh_impl(ssh_dest: str) -> None:
@@ -265,7 +274,9 @@ def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> Non
     if folder is None:
         folder = "/home/ubuntu/pytorch"
 
-    run_cmd([str(code_exe), "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"])
+    run_cmd(
+        [str(code_exe), "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"]
+    )
 
 
 @click.option("--id")

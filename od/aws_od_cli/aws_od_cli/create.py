@@ -110,19 +110,14 @@ def gen_startup_script() -> str:
 def find_security_group(name: str) -> str:
     with yaspin.yaspin(text="Finding security group") as spinner:
         response = ec2().describe_security_groups(
-            Filters=[
-                {
-                    "Name": "tag:Name",
-                    "Values": [name]
-                }
-            ]
+            Filters=[{"Name": "tag:Name", "Values": [name]}]
         )
         response = response["SecurityGroups"]
         if len(response) == 0:
             raise RuntimeError(f"Group {name} not found")
 
         ok(spinner)
-    
+
     return response[0]["GroupId"]
 
 
