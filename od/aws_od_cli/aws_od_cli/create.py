@@ -23,6 +23,7 @@ from .utils import (
     instance_by_id,
     ok,
     username,
+    TimedText
 )
 
 
@@ -31,7 +32,7 @@ def find_ami(gpu: bool) -> Dict[str, Any]:
     ami_name = "pytorch-ondemand-ami"
     if gpu:
         ami_name = "pytorch-ondemand-ami-gpu"
-    with yaspin.yaspin(text="Finding recent AMI") as spinner:
+    with yaspin.yaspin(text=TimedText("Finding recent AMI")) as spinner:
         amis = ec2().describe_images(Owners=["self"])
         for image in amis["Images"]:
             if image["Name"] == ami_name:
@@ -48,7 +49,7 @@ def find_ami(gpu: bool) -> Dict[str, Any]:
 
 
 def find_or_create_ssh_key() -> Path:
-    with yaspin.yaspin(text="Finding SSH key pair") as spinner:
+    with yaspin.yaspin(text=TimedText("Finding SSH key pair")) as spinner:
         key_path = gen_key_path()
         if key_path.exists():
             # key already exists
@@ -108,7 +109,7 @@ def gen_startup_script() -> str:
 
 
 def find_security_group(name: str) -> str:
-    with yaspin.yaspin(text="Finding security group") as spinner:
+    with yaspin.yaspin(text=TimedText("Finding security group")) as spinner:
         response = ec2().describe_security_groups(
             Filters=[{"Name": "tag:Name", "Values": [name]}]
         )
@@ -129,7 +130,7 @@ def create_instance(
     security_group: str,
     volume_size: int,
 ) -> Tuple[Dict[str, Any], str]:
-    with yaspin.yaspin(text="Starting EC2 instance") as spinner:
+    with yaspin.yaspin(text=TimedText("Starting EC2 instance")) as spinner:
         user_instances = get_instances_for_user(username())
         existing_names = [get_name(instance) for instance in user_instances]
 
@@ -185,7 +186,7 @@ def wait_for_ip_address(instance: Dict[str, Any]) -> Dict[str, Any]:
     i = 0
     conditions = {"ip": False, "running": False}
 
-    with yaspin.yaspin(text="Waiting for instance IP address") as spinner:
+    with yaspin.yaspin(text=TimedText("Waiting for instance IP address")) as spinner:
         while i < 100:
             fresh_instance = instance_by_id(id)
             if fresh_instance is None:
@@ -217,7 +218,7 @@ def wait_for_ip_address(instance: Dict[str, Any]) -> Dict[str, Any]:
 def wait_for_ssh_access(instance: Dict[str, Any]) -> Dict[str, Any]:
     ssh_dest = instance["InstanceId"]
 
-    with yaspin.yaspin(text="Waiting for SSH access") as spinner:
+    with yaspin.yaspin(text=TimedText("Waiting for SSH access")) as spinner:
         i = 0
         while i < 50:
             cmd = [
@@ -246,7 +247,7 @@ def wait_for_ssh_access(instance: Dict[str, Any]) -> Dict[str, Any]:
 def copy_files(instance: Dict[str, Any], files: List[Dict[str, str]]) -> None:
     ssh_dest = instance["InstanceId"]
 
-    with yaspin.yaspin(text="Copying config files") as spinner:
+    with yaspin.yaspin(text=TimedText("Copying config files")) as spinner:
         for f in files:
             dest = Path(f["dest_path"])
             cmd = [

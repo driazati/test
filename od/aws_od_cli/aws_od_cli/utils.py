@@ -38,6 +38,17 @@ def ok(spinner: yaspin.Spinner) -> None:
     spinner.ok("✅ ")
 
 
+class TimedText:
+    def __init__(self, text):
+        self.text = text
+        self.start = datetime.datetime.now()
+
+    def __repr__(self):
+        now = datetime.datetime.now()
+        delta = now - self.start
+        return f"{self.text} ({round(delta.total_seconds(), 1)}s)"
+
+
 def init_logger() -> None:
     global logger
 
@@ -262,7 +273,7 @@ def locate_vscode() -> Path:
 
 
 def stop_instances(action: str, ids_to_stop: List[str]) -> None:
-    with yaspin.yaspin(text="Stopping instances") as spinner:
+    with yaspin.yaspin(text=TimedText("Stopping instances")) as spinner:
         if action == "terminate":
             ec2().terminate_instances(InstanceIds=ids_to_stop)
         elif action == "stop":

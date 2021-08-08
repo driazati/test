@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 import click
 import textwrap
 import json
@@ -39,6 +39,7 @@ from aws_od_cli.utils import (
     init_logger,
     run_cmd,
     get_logger,
+    TimedText
 )
 from aws_od_cli.list import get_live_ondemands
 from aws_od_cli.configs import add_file, remove_file, list_files
@@ -198,18 +199,25 @@ def create(
         ssh_impl(ssh_dest)
 
         if rm:
-            print("Delete this instance? (y/n): ", end="")
-            response = input().lower()
-            if response in {"y", "yes", "ok"}:
-                with yaspin.yaspin(text="Stopping instance") as spinner:
-                    ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
-                    ok(spinner)
-            else:
+            was_stopped = ask_to_stop_instance(instance)
+            if not was_stopped:
                 print(
                     "Manual actions:\n"
-                    f"    SSH: 'aws_od_cli ssh --name {name}'\n"
-                    f" Remove: 'aws_od_cli stop --name {name}'\n"
+                    f"    SSH: aws_od_cli ssh --name {name}\n"
+                    f" Remove: aws_od_cli stop --name {name}\n"
                 )
+
+
+def ask_to_stop_instance(instance: Dict[str, Any]) -> bool:
+    print("Delete this instance? (y/n): ", end="")
+    response = input().lower()
+    if response in {"y", "yes", "ok"}:
+        with yaspin.yaspin(text=TimedText("Stopping instance")) as spinner:
+            ec2().terminate_instances(InstanceIds=[instance["InstanceId"]])
+            ok(spinner)
+        return True
+    else:
+        return False
 
 
 def ssh_impl(ssh_dest: str) -> None:
@@ -235,7 +243,7 @@ def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None
     Delete an on-demand. Use '--action stop' to pause an on-demand, or leave this
     option off to permanently terminate an on-demand.
     """
-    with yaspin.yaspin(text="Gathering instances") as spinner:
+    with yaspin.yaspin(text=TimedText("Gathering instances")) as spinner:
         user_instances = get_instances_for_user(username())
         ids_to_stop = []
         if all:
@@ -292,6 +300,7 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
     # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
     ssh_impl(instance["InstanceId"])
+    ask_to_stop_instance(instance)
 
 
 @click.option("--add")
