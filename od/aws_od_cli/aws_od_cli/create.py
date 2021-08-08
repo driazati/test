@@ -118,7 +118,7 @@ def find_security_group(name: str) -> str:
 
         ok(spinner)
 
-    return response[0]["GroupId"]
+    return str(response[0]["GroupId"])
 
 
 def create_instance(

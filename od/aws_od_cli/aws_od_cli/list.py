@@ -23,7 +23,7 @@ def get_live_ondemands(full: bool) -> List[Dict[str, Any]]:
         }
 
         try:
-            key = find_key(instance["KeyName"])
+            key = str(find_key(instance["KeyName"]))
         except RuntimeError:
             key = f'{instance["KeyName"]} - <unknown location>'
 
