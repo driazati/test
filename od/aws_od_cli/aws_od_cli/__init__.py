@@ -366,7 +366,7 @@ def list(full: bool) -> None:
 @cli.command()
 def rage(number: int) -> None:
     """
-    Output logs from the most recent few runs
+    Output the logs from the most recent few runs
     """
     logs = LOGS_DIR.glob("rage-*")
     paths = [x for x in reversed(sorted(logs, key=os.path.getmtime))]
