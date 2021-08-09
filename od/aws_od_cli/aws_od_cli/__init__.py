@@ -346,7 +346,7 @@ def configs(
 @cli.command()
 def list(full: bool) -> None:
     """
-    List all your on-demands
+    List all your current on-demands
     """
     log(f"Fetching full: {full}")
     rows = get_live_ondemands(full=full)
