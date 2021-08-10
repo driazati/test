@@ -278,6 +278,8 @@ def stop_instances(action: str, ids_to_stop: List[str]) -> None:
             ec2().terminate_instances(InstanceIds=ids_to_stop)
         elif action == "stop":
             ec2().stop_instances(InstanceIds=ids_to_stop)
+        elif action == "start":
+            ec2().start_instances(InstanceIds=ids_to_stop)
         else:
             raise RuntimeError(
                 f"Unknown action {action}, expected 'stop' or 'terminate'"

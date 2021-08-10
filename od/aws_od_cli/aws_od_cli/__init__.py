@@ -220,7 +220,7 @@ def ask_to_stop_instance(instance: Dict[str, Any]) -> bool:
         return False
 
 
-def ssh_impl(ssh_dest: str) -> None:
+def ssh_impl(ssh_dest: str, use_mosh: bool = False) -> None:
     login_command = gen_config().get("login_command", None)
     cmd = [
         "ssh",
@@ -228,6 +228,8 @@ def ssh_impl(ssh_dest: str) -> None:
         "StrictHostKeyChecking=no",
         ssh_dest,
     ]
+    if use_mosh:
+        cmd = ["mosh", ssh_dest]
     if login_command is not None:
         cmd += [x.strip() for x in login_command.split(",")]
     run_cmd(cmd)
@@ -281,6 +283,8 @@ def vscode(id: Optional[str], name: Optional[str], folder: Optional[str]) -> Non
     name = instance["InstanceId"]
     if folder is None:
         folder = "/home/ubuntu/pytorch"
+    elif not folder.startswith("/"):
+        folder = "/home/ubuntu/" + folder
 
     run_cmd(
         [str(code_exe), "--folder-uri", f"vscode-remote://ssh-remote+{name}{folder}"]
@@ -300,6 +304,22 @@ def ssh(id: Optional[str], name: Optional[str]) -> None:
     # TODO: stop instance when exiting, start instnace before ssh-ing in
     instance = instance_for_id_or_name_or_guess(id, name)
     ssh_impl(instance["InstanceId"])
+    ask_to_stop_instance(instance)
+
+
+@click.option("--id")
+@click.option("--name")
+@cli.command()
+def mosh(id: Optional[str], name: Optional[str]) -> None:
+    """
+    mosh into a running on-demand
+
+    If you only have a single on-demand the --id or --name flags aren't necessary.
+    Also see 'aws_od_cli list'.
+    """
+    # TODO: stop instance when exiting, start instnace before ssh-ing in
+    instance = instance_for_id_or_name_or_guess(id, name)
+    ssh_impl(instance["InstanceId"], use_mosh=True)
     ask_to_stop_instance(instance)
 
 
