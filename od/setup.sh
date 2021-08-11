@@ -83,7 +83,7 @@ install_extension "https://marketplace.visualstudio.com/_apis/public/gallery/pub
 # Manually 'activate' conda to avoid starting a new shell
 export PATH=$HOME/miniconda3/bin:$PATH
 
-# Install gh cli
+# Install GitHub cli
 conda install --yes gh --channel conda-forge
 
 # Silence MOTD
