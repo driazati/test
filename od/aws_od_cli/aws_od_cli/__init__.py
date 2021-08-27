@@ -124,6 +124,7 @@ def create(
 
     TODO: this doesn't work when Packer is updating the AMI (since it goes into
     pending status), there should be a fallback AMI that's the old one
+    test
     """
     rm = not no_rm
     if no_login and rm:
