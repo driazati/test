@@ -18,6 +18,7 @@ from aws_od_cli.create import (
     wait_for_ssh_access,
     write_ssh_configs,
     copy_files,
+    sync_files_to_local,
 )
 from aws_od_cli.utils import (
     SSH_CONFIG_PATH,
@@ -39,10 +40,10 @@ from aws_od_cli.utils import (
     init_logger,
     run_cmd,
     get_logger,
-    TimedText
+    TimedText,
 )
 from aws_od_cli.list import get_live_ondemands
-from aws_od_cli.configs import add_file, remove_file, list_files
+from aws_od_cli.configs import add_file, remove_file, list_files, load_files, save_files
 
 
 @click.group()
@@ -181,10 +182,8 @@ def create(
     log(f"Using SSH destination {ssh_dest}")
 
     if not no_files:
-        with open(FILES_PATH, "r") as f:
-            files = json.load(f)
-
-        copy_files(instance, files)
+        recorded_files = copy_files(ssh_dest, load_files())
+        save_files(recorded_files)
 
     if no_login:
         print(
@@ -199,6 +198,7 @@ def create(
     else:
         ssh_impl(ssh_dest)
 
+        sync_files_to_local(ssh_dest, load_files())
         if rm:
             was_stopped = ask_to_stop_instance(instance)
             if not was_stopped:
@@ -325,12 +325,14 @@ def mosh(id: Optional[str], name: Optional[str]) -> None:
 
 
 @click.option("--add")
+@click.option("--add-2-way")
 @click.option("--login-command")
 @click.option("--remove-id")
 @click.option("--list", is_flag=True)
 @cli.command()
 def configs(
     add: Optional[str],
+    add_2_way: Optional[str],
     login_command: Optional[str],
     remove_id: Optional[str],
     list: bool,
@@ -339,7 +341,13 @@ def configs(
     Manage files to copy to on-demand instances (dotfiles, etc)
     """
     if add is not None:
-        add_file(path=add)
+        add_file(path=add, two_way=False)
+
+    if add_2_way is not None:
+        # These are sync'ed between on-demands, not from a local copy. On creation,
+        # the current version is copied over from a local source. On instance termination,
+        # the diff is calculated and appended to the local copy.
+        add_file(path=add_2_way, two_way=True)
 
     if remove_id is not None:
         remove_file(id=remove_id)

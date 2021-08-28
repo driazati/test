@@ -46,7 +46,7 @@ def gen_id() -> int:
         i += 1
 
 
-def add_file(path: str) -> None:
+def add_file(path: str, two_way: bool) -> None:
     file = Path(path)
     files = load_files()
 
@@ -60,6 +60,7 @@ def add_file(path: str) -> None:
             "name": file.name,
             "dest_path": str(dest_path),
             "source_path": str(source_path),
+            "is_two_way": two_way,
         }
     )
     save_files(files)

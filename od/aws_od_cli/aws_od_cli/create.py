@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import time
+import json
+import tempfile
 import os
 import textwrap
 import subprocess
@@ -22,8 +24,10 @@ from .utils import (
     get_name,
     instance_by_id,
     ok,
+    log,
+    run_cmd,
     username,
-    TimedText
+    TimedText,
 )
 
 
@@ -120,6 +124,40 @@ def find_security_group(name: str) -> str:
         ok(spinner)
 
     return str(response[0]["GroupId"])
+
+
+def scp(ssh_dest, path):
+    with tempfile.NamedTemporaryFile() as f:
+        cmd = ["scp", f"{ssh_dest}:{path}", f.name]
+        log(f"Running {cmd}")
+        subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        with open(f.name) as f_r:
+            return f_r.read()
+
+
+def sync_files_to_local(ssh_dest, files):
+    record = json.loads(scp(ssh_dest, "~/.copy_record"))
+    log("Syncing files down with")
+    log(str(record))
+    files = [x for x in files if x.get("is_two_way", False)]
+    with yaspin.yaspin(text=TimedText("Syncing down remote files")) as spinner:
+        for data in files:
+            remote_content = scp(ssh_dest, data["dest_path"]).split("\n")
+            line_to_start_keeping = record[data["name"]]
+            remote_content = remote_content[line_to_start_keeping:]
+            if len(remote_content) == 0:
+                log(f"No changes for {data}")
+                continue
+            log(f"Writing remote content {data}")
+            remote_content = "\n".join(remote_content).strip()
+
+            with open(data["source_path"], "a") as f:
+                f.write("\n")
+                f.write(remote_content)
+                f.write("\n")
+            ok(spinner)
 
 
 def create_instance(
@@ -244,9 +282,12 @@ def wait_for_ssh_access(instance: Dict[str, Any]) -> Dict[str, Any]:
     return instance
 
 
-def copy_files(instance: Dict[str, Any], files: List[Dict[str, str]]) -> None:
-    ssh_dest = instance["InstanceId"]
+def lines_in_file(path: str) -> int:
+    with open(path) as f:
+        return f.read().count("\n")
 
+
+def copy_files(ssh_dest: str, files: List[Dict[str, str]]) -> None:
     with yaspin.yaspin(text=TimedText("Copying config files")) as spinner:
         for f in files:
             dest = Path(f["dest_path"])
@@ -265,7 +306,24 @@ def copy_files(instance: Dict[str, Any], files: List[Dict[str, str]]) -> None:
             ]
             subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+        # Keep the file sizes of when we copied it so we know where to start reading
+        # in the new configs
+        record = {}
+        for f in files:
+            record[f["name"]] = lines_in_file(f["source_path"])
+
+        with tempfile.NamedTemporaryFile() as f:
+            with open(f.name, "w") as f_w:
+                json.dump(record, f_w, indent=2)
+            run_cmd(
+                ["scp", f.name, f"{ssh_dest}:~/.copy_record"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
         ok(spinner)
+
+    return files
 
 
 def add_ssh_config_include() -> None:
