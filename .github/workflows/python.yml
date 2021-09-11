@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Test
         env:
-          DATA: '${{ github.job.id }}'
+          DATA: '${{ github.event }}'
         run: |
           echo "It's: [$DATA]"
       # - uses: actions/checkout@v2
