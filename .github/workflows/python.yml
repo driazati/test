@@ -18,7 +18,7 @@ jobs:
         env:
           DATA: '${{ github.job.id }}'
         run: |
-          echo $DATA
+          echo "It's: [$DATA]"
       # - uses: actions/checkout@v2
       # - name: Install dependencies
       #   run: |
