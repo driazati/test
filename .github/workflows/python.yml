@@ -19,6 +19,7 @@ jobs:
           DATA: '${{ github.event.check_run.id }}'
           DATA2: '${{ github.event.workflow_job.id }}'
         run: |
+          echo "${{ github.event_name }}"
           echo "It's: [$DATA]"
           echo "2It's: [$DATA2]"
       # - uses: actions/checkout@v2
