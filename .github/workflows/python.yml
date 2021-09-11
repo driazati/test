@@ -3,8 +3,8 @@ on:
   push:
     branches:
       - master
-    # paths:
-    #   - 'od/**'
+    paths:
+      - 'od/**'
 
 concurrency: 
   group: lint
@@ -14,25 +14,17 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Test
-        env:
-          DATA: '${{ github.event.check_run.id }}'
-          DATA2: '${{ github.event.workflow_job.id }}'
+      - uses: actions/checkout@v2
+      - name: Install dependencies
         run: |
-          echo "${{ github.event_name }}"
-          echo "It's: [$DATA]"
-          echo "2It's: [$DATA2]"
-      # - uses: actions/checkout@v2
-      # - name: Install dependencies
-      #   run: |
-      #     pip install flake8==3.8.2 mypy==0.812
-      # - name: Flake8
-      #   run: |
-      #     set -eux
-      #     cd od/aws_od_cli
-      #     flake8
-      # - name: Mypy
-      #   run: |
-      #     set -eux
-      #     cd od/aws_od_cli
-      #     mypy --config mypy.ini
+          pip install flake8==3.8.2 mypy==0.812
+      - name: Flake8
+        run: |
+          set -eux
+          cd od/aws_od_cli
+          flake8
+      - name: Mypy
+        run: |
+          set -eux
+          cd od/aws_od_cli
+          mypy --config mypy.ini

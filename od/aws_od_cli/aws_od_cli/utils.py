@@ -304,6 +304,6 @@ def init() -> None:
             f.write("")
 
 
-def run_cmd(cmd: List[str]) -> 'subprocess.CompletedProcess[bytes]':
+def run_cmd(cmd: List[str], **kwargs: Any) -> 'subprocess.CompletedProcess[bytes]':
     log(f"Running {cmd}")
-    return subprocess.run(cmd)
+    return subprocess.run(cmd, **kwargs)  # type: ignore
