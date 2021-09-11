@@ -16,9 +16,11 @@ jobs:
     steps:
       - name: Test
         env:
-          DATA: '${{ github.event }}'
+          DATA: '${{ github.event.check_run.id }}'
+          DATA2: '${{ github.event.workflow_job.id }}'
         run: |
           echo "It's: [$DATA]"
+          echo "2It's: [$DATA2]"
       # - uses: actions/checkout@v2
       # - name: Install dependencies
       #   run: |
