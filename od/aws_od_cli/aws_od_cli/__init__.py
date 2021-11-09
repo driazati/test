@@ -105,6 +105,7 @@ def sync() -> None:
     help="Don't stop the on-demand once the SSH session is exited",
 )
 @click.option("--gpu", is_flag=True, help="Make default GPU instance")
+@click.option("--windows", is_flag=True, help="Make windows instance")
 @click.option(
     "--instance-type", "user_instance_type", help="Directly specify instance type"
 )
@@ -115,6 +116,7 @@ def create(
     no_login: bool,
     no_files: bool,
     no_rm: bool,
+    windows: bool,
     gpu: bool,
     user_ami: Optional[str],
     user_instance_type: Optional[str],
@@ -148,7 +150,7 @@ def create(
     if user_ami is not None:
         ami = {"ImageId": user_ami}
     else:
-        ami = find_ami(gpu=gpu)
+        ami = find_ami(gpu=gpu, windows=windows)
 
     log(f"Using ami {ami}")
 
@@ -158,6 +160,9 @@ def create(
     # TODO: corp net sec group
     security_group = find_security_group("ondemand_ssh_and_mosh")
 
+    if windows:
+        volume_size = 120
+
     # Make the instance via boto3
     instances, name = create_instance(
         ami,
@@ -166,6 +171,7 @@ def create(
         use_startup_script=not no_files,
         security_group=security_group,
         volume_size=volume_size,
+        windows=windows,
     )
     instance = instances["Instances"][0]
 

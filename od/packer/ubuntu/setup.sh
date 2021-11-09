@@ -6,7 +6,15 @@ lsb_release -a
 # Wait for background stuff to finish before launching apt
 /usr/bin/cloud-init status --wait
 sudo apt update
-sudo apt install -y build-essential clang git ccache unzip zip ncdu fish awscli docker.io silversearcher-ag ripgrep jq tmux gron mosh
+sudo apt install -y build-essential clang git ccache unzip zip ncdu fish awscli docker.io silversearcher-ag ripgrep jq tmux gron mosh gdb
+
+
+curl -LO https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh
+bash install.sh
+source ~/.bashrc
+nvm list-remote
+nvm install v14.10.0
+nvm use v14.10.0
 
 # Install fzf (use from source install since it installs key bindings too)
 git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf

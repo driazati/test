@@ -31,7 +31,7 @@ from .utils import (
 )
 
 
-def find_ami(gpu: bool) -> Dict[str, Any]:
+def find_ami(gpu: bool, windows: bool) -> Dict[str, Any]:
     ami = None
     ami_name = "pytorch-ondemand-ami"
     if gpu:
@@ -64,6 +64,18 @@ def find_or_create_ssh_key() -> Path:
         ok(spinner)
 
     return key_path
+
+
+def gen_windows_startup_script(privkey: Path) -> str:
+    r = run_cmd(["ssh-keygen", "-y", "-f", privkey], stdout=subprocess.PIPE)
+    pubkey = r.stdout.decode()
+    return textwrap.dedent(
+        f"""
+        <powershell>
+        Add-Content -Path C:\ProgramData\ssh\administrators_authorized_keys -Value '{pubkey}'
+        </powershell>
+    """
+    ).strip()
 
 
 def gen_startup_script() -> str:
@@ -165,6 +177,7 @@ def create_instance(
     key_path: Path,
     instance_type: str,
     use_startup_script: bool,
+    windows: bool,
     security_group: str,
     volume_size: int,
 ) -> Tuple[Dict[str, Any], str]:
@@ -183,6 +196,9 @@ def create_instance(
                     return maybe_name
 
         name = gen_name()
+        startup_script = gen_startup_script() if use_startup_script else ""
+        if windows:
+            startup_script = gen_windows_startup_script(key_path)
         instance = ec2().run_instances(
             BlockDeviceMappings=[
                 {
@@ -200,7 +216,7 @@ def create_instance(
             MaxCount=1,
             KeyName=key_path.name,
             InstanceType=instance_type,
-            UserData=gen_startup_script() if use_startup_script else "",
+            UserData=startup_script,
             TagSpecifications=[
                 {
                     "ResourceType": "instance",
