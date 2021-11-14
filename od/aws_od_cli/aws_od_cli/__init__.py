@@ -247,19 +247,24 @@ def stop(name: Optional[str], all: bool, id: Optional[str], action: str) -> None
     option off to permanently terminate an on-demand.
     """
     with yaspin.yaspin(text=TimedText("Gathering instances")) as spinner:
-        user_instances = get_instances_for_user(username())
         ids_to_stop = []
         if all:
+            user_instances = get_instances_for_user(username())
             log("Stopping all instances")
             for instance in user_instances:
                 ids_to_stop.append(instance["InstanceId"])
         else:
-            to_stop = instance_for_id_or_name(id, name, user_instances)
+            if name is None and id is None:
+                to_stop = instance_for_id_or_name_or_guess(id, name)
+                ids_to_stop.append(to_stop["InstanceId"])
+            else:
+                user_instances = get_instances_for_user(username())
+                to_stop = instance_for_id_or_name(id, name, user_instances)
 
-            if to_stop is None:
-                raise RuntimeError(f"Instance {name} not found")
+                if to_stop is None:
+                    raise RuntimeError(f"Instance {name} not found")
 
-            ids_to_stop.append(to_stop["InstanceId"])
+                ids_to_stop.append(to_stop["InstanceId"])
 
         ok(spinner)
 
