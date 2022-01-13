@@ -23,7 +23,7 @@ import subprocess
 import re
 from urllib import request
 from urllib import error
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, List
 
 
 
@@ -97,27 +97,22 @@ def git(command):
     return proc.stdout.decode().strip()
 
 
-def is_pr_ready(data: Any) -> bool:
-    approved = data["reviewDecision"] == "APPROVED"
-    print("Is approved?", approved)
 
-    statuses = data["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"][
-        "nodes"
-    ]
-    unified_statuses = []
-    for status in statuses:
-        if "context" in status:
-            unified_statuses.append((status["context"], status["state"] == "SUCCESS"))
-            # non-GHA
-        else:
-            # GitHub Actions
-            workflow = status["checkSuite"]["workflowRun"]["workflow"]["name"]
-            name = f"{workflow} / {status['name']}"
-            unified_statuses.append((name, status["conclusion"] == "SUCCESS"))
+def find_reviewers(body: str) -> List[str]:
+    print(f"Parsing body:\n{body}")
+    matches = re.findall(r'(cc( @[-A-Za-z0-9]+)+)', body, flags=re.MULTILINE)
+    matches = [full for full, last in matches]
 
-    print("Got statuses:", json.dumps(unified_statuses, indent=2))
-    passed_ci = all(status for name, status in unified_statuses)
-    return approved and passed_ci
+    print("Found matches:", matches)
+    reviewers = []
+    for match in matches:
+        if match.startswith("cc "):
+            match = match.replace("cc ", "")
+        users = [x.strip() for x in match.split("@")]
+        reviewers += users
+
+    reviewers = set(x for x in reviewers if x != "")
+    return list(reviewers)
 
 
 if __name__ == "__main__":
@@ -126,26 +121,22 @@ if __name__ == "__main__":
     parser.add_argument("--remote", default="origin", help="ssh remote to parse")
     args = parser.parse_args()
 
+
+    remote = git(["config", "--get", f"remote.{args.remote}.url"])
+    user, repo = parse_remote(remote)
+    github = GitHubRepo(token=os.environ["GITHUB_TOKEN"], user=user, repo=repo)
     pr = json.loads(os.environ["PR"])
+    # with open("target.json") as f:
+    #     pr = json.load(f)
 
-    print('got it')
-    print(pr)
-    # remote = git(["config", "--get", f"remote.{args.remote}.url"])
-    # user, repo = parse_remote(remote)
-    # github = GitHubRepo(token=os.environ["GITHUB_TOKEN"], user=user, repo=repo)
+    number = pr["number"]
+    body = pr["pull_request"]["body"]
+    if body is None:
+        body = ""
 
-    # data = github.graphql(
-    #     commit_query(repo, user, args.sha)
-    # )
-    # pr = data["data"]["repository"]["object"]["associatedPullRequests"]["nodes"][0]
+    to_add = find_reviewers(body)
+    print("Adding reviewers:", to_add)
 
-    # if is_pr_ready(pr):
-    #     print("PR passed CI and is approved, labelling...")
-    #     github.post(f"issues/{pr['number']}/labels", {"labels": ["ready-for-merge"]})
-    # else:
-    #     print("PR is not ready for merge")
-    #     try:
-    #         github.delete(f"issues/{pr['number']}/labels/ready-for-merge")
-    #     except error.HTTPError as e:
-    #         print(e)
-    #         print("Failed to remove label (it may not have been there at all)")
+    github.post(f"pulls/{number}/requested_reviewers", {
+        "reviewers": to_add
+    })
