@@ -109,6 +109,14 @@ class GitHubRepo:
             response = json.loads(response.read())
         return response
 
+    def delete(self, url: str) -> Dict[str, Any]:
+        url = self.base + url
+        print("Requesting", url)
+        req = request.Request(url, headers=self.headers(), method="DELETE")
+        with request.urlopen(req) as response:
+            response = json.loads(response.read())
+        return response
+
 
 def parse_remote(remote: str) -> Tuple[str, str]:
     """
@@ -180,3 +188,4 @@ if __name__ == "__main__":
         github.post(f"issues/{pr['number']}/labels", {"labels": ["ready-for-merge"]})
     else:
         print("PR is not ready for merge")
+        github.delete(f"issues/{pr['number']}/labels/ready-for-merge")

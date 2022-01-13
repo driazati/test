@@ -38,9 +38,7 @@ jobs:
           submodules: "recursive"
       - name: Check if PR is ready
         env:
-          # EVENT: ${{ toJson(github.event) }}
-          # EVENT_NAME: ${{ github.event_name }}
           SHA: ${{ github.event.pull_request.head.sha || github.event.commit.sha }}
         run: |
-          echo $SHA
-          # python check_pr_is_ready.py
+          set -eux
+          python check_pr_is_ready.py --sha "$SHA"
