@@ -22,10 +22,11 @@
 name: PR
 
 on:
-  pull_request:
+  pull_request_target:
+    types: [assigned, opened, synchronize, reopened]
 
 concurrency:
-  group: PR-${{ github.event.pull_request.number || github.sha }}
+  group: PR-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -39,10 +40,5 @@ jobs:
         env:
           EVENT: ${{ toJson(github.event) }}
           EVENT_NAME: ${{ github.event_name }}
-        shell: python
         run: |
-          import os
-          import json
-
-          data = json.loads(os.environ["EVENT"])
-          print(data)
+          echo $EVENT
