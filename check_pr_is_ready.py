@@ -170,9 +170,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=help)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--remote", default="origin", help="ssh remote to parse")
-    parser.add_argument(
-        "--pr-title", help="(testing) PR title to use instead of fetching from GitHub"
-    )
     args = parser.parse_args()
 
     remote = git(["config", "--get", f"remote.{args.remote}.url"])

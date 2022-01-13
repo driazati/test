@@ -38,7 +38,8 @@ jobs:
           submodules: "recursive"
       - name: Check if PR is ready
         env:
-          EVENT: ${{ toJson(github.event) }}
-          EVENT_NAME: ${{ github.event_name }}
+          # PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR: ${{ toJson(github.event.pull_request) }}
         run: |
-          echo $EVENT
+          set -eux
+          cc_reviewers.py

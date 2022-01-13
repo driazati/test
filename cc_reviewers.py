@@ -123,29 +123,29 @@ def is_pr_ready(data: Any) -> bool:
 if __name__ == "__main__":
     help = "Exits with 0 if CI should be skipped, 1 otherwise"
     parser = argparse.ArgumentParser(description=help)
-    parser.add_argument("--sha", required=True)
     parser.add_argument("--remote", default="origin", help="ssh remote to parse")
-    parser.add_argument(
-        "--pr-title", help="(testing) PR title to use instead of fetching from GitHub"
-    )
     args = parser.parse_args()
 
-    remote = git(["config", "--get", f"remote.{args.remote}.url"])
-    user, repo = parse_remote(remote)
-    github = GitHubRepo(token=os.environ["GITHUB_TOKEN"], user=user, repo=repo)
+    pr = json.loads(os.environ["PR"])
 
-    data = github.graphql(
-        commit_query(repo, user, args.sha)
-    )
-    pr = data["data"]["repository"]["object"]["associatedPullRequests"]["nodes"][0]
+    print('got it')
+    print(pr)
+    # remote = git(["config", "--get", f"remote.{args.remote}.url"])
+    # user, repo = parse_remote(remote)
+    # github = GitHubRepo(token=os.environ["GITHUB_TOKEN"], user=user, repo=repo)
 
-    if is_pr_ready(pr):
-        print("PR passed CI and is approved, labelling...")
-        github.post(f"issues/{pr['number']}/labels", {"labels": ["ready-for-merge"]})
-    else:
-        print("PR is not ready for merge")
-        try:
-            github.delete(f"issues/{pr['number']}/labels/ready-for-merge")
-        except error.HTTPError as e:
-            print(e)
-            print("Failed to remove label (it may not have been there at all)")
+    # data = github.graphql(
+    #     commit_query(repo, user, args.sha)
+    # )
+    # pr = data["data"]["repository"]["object"]["associatedPullRequests"]["nodes"][0]
+
+    # if is_pr_ready(pr):
+    #     print("PR passed CI and is approved, labelling...")
+    #     github.post(f"issues/{pr['number']}/labels", {"labels": ["ready-for-merge"]})
+    # else:
+    #     print("PR is not ready for merge")
+    #     try:
+    #         github.delete(f"issues/{pr['number']}/labels/ready-for-merge")
+    #     except error.HTTPError as e:
+    #         print(e)
+    #         print("Failed to remove label (it may not have been there at all)")
