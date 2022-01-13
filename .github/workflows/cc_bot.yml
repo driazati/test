@@ -42,4 +42,4 @@ jobs:
           PR: ${{ toJson(github.event.pull_request) }}
         run: |
           set -eux
-          cc_reviewers.py
+          python cc_reviewers.py
