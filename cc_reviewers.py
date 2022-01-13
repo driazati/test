@@ -130,7 +130,7 @@ if __name__ == "__main__":
     #     pr = json.load(f)
 
     number = pr["number"]
-    body = pr["pull_request"]["body"]
+    body = pr["body"]
     if body is None:
         body = ""
 
