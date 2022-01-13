@@ -22,6 +22,7 @@ import argparse
 import subprocess
 import re
 from urllib import request
+from urllib import error
 from typing import Dict, Tuple, Any
 
 
@@ -188,4 +189,8 @@ if __name__ == "__main__":
         github.post(f"issues/{pr['number']}/labels", {"labels": ["ready-for-merge"]})
     else:
         print("PR is not ready for merge")
-        github.delete(f"issues/{pr['number']}/labels/ready-for-merge")
+        try:
+            github.delete(f"issues/{pr['number']}/labels/ready-for-merge")
+        except error.HTTPError as e:
+            print(e)
+            print("Failed to remove label (it may not have been there at all)")
