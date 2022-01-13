@@ -40,6 +40,7 @@ jobs:
         env:
           # PR_NUMBER: ${{ github.event.pull_request.number }}
           PR: ${{ toJson(github.event.pull_request) }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eux
           python cc_reviewers.py
