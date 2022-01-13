@@ -39,6 +39,7 @@ jobs:
       - name: Check if PR is ready
         env:
           SHA: ${{ github.event.pull_request.head.sha || github.event.commit.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eux
           python check_pr_is_ready.py --sha "$SHA"
