@@ -37,26 +37,10 @@ jobs:
         with:
           submodules: "recursive"
       - name: Check if PR is ready
-        id: check-pr
         env:
           EVENT: ${{ toJson(github.event) }}
-          EVENT_NAME: ${{ github.event_name }}
+          # EVENT_NAME: ${{ github.event_name }}
+          # SHA: ${{ github.event.sha }}
         run: |
-          set -eux
-          echo Event: "$EVENT_NAME"
-          echo status! "$EVENT"
-          run: echo '::set-output name=should-label::false'
-      # - name: Label ready-for-merge
-      #   if: ${{ steps.check-pr.outputs.should-label }} == 'true'
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     PR_NUMBER: ${{ github.event. }}
-      #     OWNER: ${{ github.repository_owner }}
-      #     REPO: ${{ github.event.repository.name }}
-      #   run: |
-      #     set -eux
-      #     curl \
-      #       -X POST \
-      #       -H "Authorization: token ${GITHUB_TOKEN}" \
-      #       "https://api.github.com/repos/${OWNER}/${REPO}/issues/${ISSUE_NUMBER}/labels" \
-      #       -d '{"labels":["ready-for-merge"]}'
+          echo $EVENT
+          # python check_pr_is_ready.py
