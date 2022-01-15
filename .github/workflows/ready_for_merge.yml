@@ -36,10 +36,15 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: "recursive"
-      - name: Check if PR is ready
+      - name: Show event
         env:
-          SHA: ${{ github.event.pull_request.head.sha || github.event.commit.sha }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ toJson(github.event) }}
         run: |
-          set -eux
-          python check_pr_is_ready.py --sha "$SHA"
+          echo "$EVENT"
+      # - name: Check if PR is ready
+      #   env:
+      #     SHA: ${{ github.event.pull_request.head.sha || github.event.commit.sha }}
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     set -eux
+      #     python check_pr_is_ready.py --sha "$SHA"
