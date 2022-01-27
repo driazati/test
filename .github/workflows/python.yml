@@ -3,10 +3,10 @@ on:
   push:
     branches:
       - master
-    # paths:
-    #   - "od/**"
+    paths:
+      - 'od/**'
 
-concurrency:
+concurrency: 
   group: lint
   cancel-in-progress: true
 
@@ -15,18 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-      # - name: Install dependencies
-      #   run: |
-      #     pip install flake8==3.8.2 mypy==0.812
-      # - name: Flake8
-      #   run: |
-      #     set -eux
-      #     cd od/aws_od_cli
-      #     flake8
-      # - name: Mypy
-      #   run: |
-      #     set -eux
-      #     cd od/aws_od_cli
-      #     mypy --config mypy.ini
+      - name: Install dependencies
+        run: |
+          pip install flake8==3.8.2 mypy==0.812
+      - name: Flake8
+        run: |
+          set -eux
+          cd od/aws_od_cli
+          flake8
+      - name: Mypy
+        run: |
+          set -eux
+          cd od/aws_od_cli
+          mypy --config mypy.ini
